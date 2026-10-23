@@ -76,3 +76,47 @@
   default-off production implementation and its permanent release gates are
   explicitly pending; the earlier 1,127-test result is not reused as proof of a
   future implementation. No shipped runtime sources or README changed here.
+
+## Context, speed, UX and official comparison follow-up
+
+- User explicitly requested optimization for context, speed and usability, plus
+  searches of Codex/Claude documentation. Updated `PRODUCT.md` first, then
+  `TECH.md`; kept the confirmed ordinary-user workflow and explicit opt-in scope.
+- Read official Codex Goals and prompt-caching/compaction documentation, and
+  Claude Code's goals, Stop-hook guards, known background waits and caching docs.
+  Saved sourced differences and Pi-specific inferences in `RESEARCH.md`. Neither
+  competing product was run. Did not copy a default cap or add a per-turn model
+  evaluator on the strength of those sources alone.
+- Added `efficiency.mjs` and `profile-worker.mjs`: 24 fixtures × 3 isolated source
+  copies have identical parent request bytes and matching child size breakdowns.
+  Existing 24-fixture context gate passed without refreshing baselines.
+- Ran 19 additional actual-SDK scenarios through normal `/goal` confirmation.
+  Measured payload growth, draft/executor/auditor calls and local dispatch. The
+  candidate adds no classification call; distinct reasoning/custom tools reach
+  their artifact/audit without the unconditional policy's delay. Explicit waits
+  remain quiet and duplicate producer signals yield one wake. No new paid calls.
+- Counterfactual no-tool guards stop repeated idle text and also cut off the
+  distinct reasoning fixture. Existing `maxAutonomousRuns=4` stops through the
+  actual product. Repeated `ls` remains a false negative for the pacing heuristic.
+  Recorded unbounded default-loop cost instead of claiming universal optimality.
+- Measured warm and invalidated-settings entry costs separately. Disabled pacing
+  took zero goal-content snapshots. Small lookup overhead is measured honestly;
+  no extra settings cache or classifier is justified by the microsecond timings.
+- A prefix-invariance assertion failed: the first work tool changes the leading
+  system prompt despite unchanged schemas. Preserved that observation instead of
+  dropping the first request. `profile-boundary.mjs` reproduces stale draft-only
+  guidance and a missing fresh-custom system prompt with two fixture tools and
+  **without importing pi-goal-x**. Traced Pi 1.0 custom-trigger preparation versus
+  its next-response refresh. Added a supported host/API compatibility release
+  gate; no private host patch or upstream message was made.
+- The initial performance UI stub omitted SDK defaults and timed out before work;
+  corrected it to use `createContext().ui` and reran the campaign. Final evidence
+  distinguishes byte equality, live prefix transitions, local timing, actual
+  usage counters and modeled policies. `PERFORMANCE.md` records release budgets
+  and pending gates. Production implementation and final UI copy/layout remain
+  pending; the earlier full-suite result is not reused as a new production pass.
+- Follow-up validation passed: repository typecheck/lint, explicit lint of all
+  continuation helpers, diff whitespace checks, 37 local documentation links,
+  evidence/cardinality/measurement-budget assertions and the unchanged 24-fixture
+  context gate. No production source, dependency, root README or unrelated spec
+  changed. The supported-host prompt/profile resolution remains an explicit gate.

@@ -25,6 +25,50 @@ not automatically evidence for changing every user's default.
 3. A reproducible report with actual requests, delays, artifacts, user actions,
    failures and limitations. Distinguish scripted provider tests, real-model
    sessions and terminal interaction; none alone proves broad user usability.
+4. A sourced comparison with official Codex and Claude Code documentation, plus
+   measured context growth, prompt-prefix stability and local dispatch costs.
+   Treat their policies as alternatives to evaluate, not proof that one is right
+   for Pi. Keep differences between ordinary agent turns and goal continuation
+   explicit.
+
+## Context, speed and usability requirements
+
+The user's further direction on 2026-10-23 makes all three release criteria, rather
+than incidental observations:
+
+- Default continuation adds no model call to classify progress and no artificial
+  timer delay. Avoid serial work when existing independent work can run together.
+- Keep system/tool prefixes stable, retain small history triggers, and inject
+  current state at the request tail. Do not repeat full objectives or add a new
+  ready declaration to each ordinary execution. Preserve Pi's compaction and
+  provider-cache behavior; a cache hit is not free context or zero cost.
+- Explicit waiting makes zero model requests before its event/deadline. UI timer
+  updates and opening settings also require no inference. Measure actual request
+  payloads and local dispatch separately from remote inference latency.
+- Disabled optional pacing does not serialize goal content or classify tool
+  activity. Long task lists must not introduce proportional default pacing work.
+- One ordinary start/confirm flow, clear running/paused/completed status and the
+  existing pause/resume controls remain sufficient. Advanced settings must show
+  scope, effective value and source, explain consequences, and support undoing a
+  pending delay. Avoid implementation jargon in normal status messages.
+- Test bounded no-tool continuation guards from the comparison products against
+  useful reasoning and unfamiliar tools as well as repeated empty replies. Report
+  their false stops and the candidate's remaining idle-loop cost honestly. Do not
+  claim universal optimality or silently change the confirmed default persona.
+
+Use reproducible, offline measurements for scheduler and context comparisons.
+Existing real-model observations establish successful workflows, not a statistically
+valid speed ranking. Record budgets, baselines, evidence limitations and remaining
+production gates in the technical plan and evaluation report.
+
+The new SDK measurements exposed a prefix transition after the first work tool,
+shared by the original and candidate policies. A minimal reproduction without
+pi-goal-x confirms the host's custom-turn prompt/profile mismatch in Pi 1.0. Do
+not call the live path perfectly cache-stable. Before release, ensure the correct
+execution prompt/profile is applied at the first executor request through a
+supported host path or upstream fix. Retain the reproduction and compatibility
+limitation; do not patch private host state. Neither a passing fixed-state context
+gate nor an unchanged tool schema proves that a live system prefix stayed identical.
 
 This work validates the plan before a production redesign. Prototype code belongs
 in the evaluation area or isolated scratch copies. Keep #90 independently

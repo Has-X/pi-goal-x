@@ -17,6 +17,13 @@ production replacement**. The initial prototype's opt-out defect was fixed and
 verified; that fix and its tests must be ported before shipping. The original #90
 fix remains independently useful.
 
+The subsequent context/speed review adds a release gate: Pi 1.0 custom-triggered
+execution can initially carry stale or missing prompt guidance. A minimal
+reproduction without this extension confirms host behavior. See
+[performance evidence and budgets](PERFORMANCE.md) and the
+[official Codex/Claude comparison](RESEARCH.md). The prototype is not being
+presented as perfectly cache-stable or ready to merge.
+
 ## What was actually tested
 
 - Original implicit policy: source at `64c5ace`.
@@ -34,6 +41,10 @@ fix remains independently useful.
 - Three actual interactive terminal sessions: goal creation/pause/resume/completion,
   global/project preference selection, and opting out during a paced goal. Keys are sent to the installed CLI;
   captured terminal bytes are replayed through xterm for readable screen evidence.
+- 72 offline request captures (24 fixtures against all three policies), 19 more
+  SDK scenarios using `/goal` with draft confirmation, and warm/cold settings-entry
+  microbenchmarks. No additional external model calls.
+- Two minimal host-only prompt/profile reproductions, with no goal extension.
 
 This is an agent-operated walkthrough, not a study of representative human users.
 The real-model sample uses one provider/model, and no broad statistical performance
@@ -74,6 +85,28 @@ data does not mean that behavior meets the product acceptance criteria.
 The repeated `ls` case also prevents an overstated efficiency claim. An activity
 heuristic can be both over-sensitive to useful work and insensitive to useless
 work. It is a cost-control option with limitations, not semantic progress tracking.
+
+## Context, speed and official product comparison
+
+The additional [performance campaign](PERFORMANCE.md) found no added default bytes
+in equal-state requests, no extra classification inference, zero optional goal
+snapshots while disabled and local continuation around 4–5ms. Explicit waits remain
+quiet until their wake. A configured four-run allowance stops through the product;
+modeled no-tool guards also stop idle text, but interrupt a distinct reasoning
+sequence. Byte counts, local dispatch time, actual model usage and policy-model
+results are reported separately.
+
+The live leading prompt changes after the first work tool in original and
+candidate sessions. [Host-only evidence](evidence/profile-boundary-results.json)
+reproduces the mismatch independently. The implementation plan now requires a
+supported fix/compatibility resolution before claiming the first execution has
+the correct prompt and stable cache prefix. Fixed-state equality alone is insufficient.
+
+[Official documentation research](RESEARCH.md) covers Codex Goals, Claude Code
+Goals/Stop hooks, known background waits, prompt caching and compaction. It supports
+event wakes and stable prefixes, while exposing a real policy choice around
+no-tool guards. No competing product was run, and their guard rules are not being
+represented as progress proofs or silently copied into the default.
 
 ## Real-model journeys
 
@@ -207,6 +240,10 @@ Other evaluation setbacks:
 5. Run typecheck, lint, all unit/integration/e2e tests, discovery self-check and the
    context gate before merging the production change. Keep detailed docs out of
    README. Separate optional producer adapters and stall recovery from this change.
+6. Resolve the measured first-execution prompt/profile compatibility gate, using
+   the standalone host reproduction and supported APIs. Verify fresh/drafted,
+   resumed and reloaded requests across the supported SDK matrix; preserve the
+   observations until a real fix is verified.
 
 The production replacement is **not implemented in this planning commit**. In this
 evaluation, repository typecheck/lint, explicit experiment lint, Python syntax and

@@ -146,3 +146,54 @@ timing/request data, failed attempts, evidence quality and remaining release gat
 Update `PRODUCT.md` from evidence first, then this plan and implementation log.
 Mark plan/evaluation complete independently of production implementation; do not
 report unimplemented settings or future integrations as shipped.
+
+## 8. Context, speed and comparison protocol
+
+Research official Codex goal continuation, prompt caching, Claude Code goals,
+Stop-hook loop protection and caching. Save direct sources and access date in
+`RESEARCH.md`; distinguish documented product behavior from Pi design inference.
+Do not claim to have run either competing product. Counterfactual guards in the
+local SDK harness are policy models with explicitly stated turn-count semantics.
+
+Add an offline `efficiency.mjs` campaign using the real Pi SDK, isolated settings,
+the three existing source copies and the same localhost scripted provider. Record
+provider-visible message and tool-schema bytes, request counts, bounded history
+growth, stable prefix digests and the time from prior settlement to next request.
+Separate provider request framing from model-visible content, and byte counts from
+provider token accounting. Never derive cache hit rates or billed savings from
+common-prefix lengths. Keep existing baseline files unchanged.
+
+Exercise repeated idle text, distinct reasoning responses, unfamiliar productive
+tools and explicit waits. Compare the current/candidate defaults and selected
+pacing; model the documented no-tool guard tradeoff without presenting the model
+as a tested Codex/Claude implementation. Include a real configured run-cap option.
+Use existing model-usage evidence to report input/output/cache counts separately;
+do not compare totals across nondeterministic runs as policy effects.
+
+Measure scheduler entry/bookkeeping costs at small and large task lists, with
+warm-up and multiple samples. Count calls to the optional goal-content snapshot to
+prove the disabled path skips it. Measure cold/small/big cases separately; report
+absolute local p50/p95 and environment. Do not promise sub-millisecond UI response
+from a local microbenchmark or conflate loopback dispatch with remote inference.
+
+Release gates: zero new default schema/policy bytes versus the original at equal
+goal state; unchanged 24-fixture context gate; no pacing snapshot while disabled;
+no extra classification request; no 30-second default delay; zero model requests
+inside an explicit wait; one wake after duplicate events. Reuse the existing
+prefix/compaction/large-history regressions. A material regression requires a
+documented cause or repair rather than a baseline refresh.
+
+The live SDK campaign found an actual leading-prompt change after the first work
+tool in both original and candidate copies, despite stable tool schemas. Track
+prefix transitions separately from fixed-state equality. Add a production gate
+for fresh `/goal` and `/goal-direct` sessions, after drafting, after reload and
+after resume on supported hosts: the first executor request must receive the
+correct execution prompt/tool profile, and the next work tool must not introduce
+an avoidable prefix rewrite. `profile-boundary.mjs` now reproduces both the stale
+draft prompt and empty fresh-custom prompt with two fixture tools and no goal
+extension. Pi 1.0's custom-message path starts `_runAgentPrompt` directly, whereas
+normal `prompt()` applies `_preparePromptAndToolLoadout`; next-turn refresh repairs
+the profile after a tool response. Verify a supported host/API fix or retain an
+explicit unresolved compatibility gate. Do not monkey-patch private host members,
+silently add a second model request, or hide the first request in the measurements.
+The standalone script is ready for an upstream report; no report has been sent.
