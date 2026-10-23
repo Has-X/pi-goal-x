@@ -1,5 +1,13 @@
 # Open issue assessment and resolution
 
+> Follow-up product steering, 2026-10-23: the user confirmed that the standard
+> workflow is `/goal`, prompt useful continuation, and ordinary pause/resume.
+> Background orchestration and extra cost controls are optional. The default
+> idle-pacing decision below is provisional and must not be merged as the final
+> policy. The full replacement plan and comparative validation live in
+> [continuation defaults validation](../2026-10-23-continuation-defaults-validation/PRODUCT.md).
+> The independent stale-context fix for #90 remains accepted.
+
 Reviewed all open GitHub issues on 2026-10-23 against `origin/main` at
 `64c5ace`. The complete open set is #90 and #100; neither has follow-up
 comments. Both defects are still present and should be fixed on

@@ -60,3 +60,13 @@
   assumptions. Unknown/custom tools can still be paced if they neither register
   recognized work nor change goal content; continuation remains available.
 - The unrelated pre-existing untracked spec and README are untouched.
+
+## Follow-up product steering
+
+- User requested a full plan and human-style evaluation, confirming that ordinary
+  `/goal` work should continue promptly and specialized controls should be opt-in.
+- The initial default-backoff choice is provisional and must not be merged as
+  final policy. See `../2026-10-23-continuation-defaults-validation/` for the full
+  replacement plan, comparative/terminal/real-model results and merge blockers.
+- #90 stays independently accepted. The production opt-in revision is pending;
+  the validation result above describes `3551bcc`, not that future revision.

@@ -1,9 +1,10 @@
 # Implicit continuation by default (#63)
 
-> Historical pacing decision superseded by the
-> [2026-10-23 open-issue resolution](../2026-10-23-open-issue-resolution/PRODUCT.md)
-> for #100. Continuation still requires no tools or declaration, but repeated
-> idle executions now back off instead of making unpaced provider requests.
+> The [initial #100 proposal](../2026-10-23-open-issue-resolution/PRODUCT.md)
+> added default pacing on a branch. Following user steering and comparative
+> evaluation, the [continuation defaults plan](../2026-10-23-continuation-defaults-validation/PRODUCT.md)
+> recommends retaining this original immediate default and making pacing opt-in.
+> That production revision is pending; the branch's default backoff is provisional.
 
 Successful executions of active auto-continuing goals continue immediately when the host is ready, without tool, task, progress, or disposition requirements. No inactivity delays or missing-disposition pauses apply by default. Final-task completion can continue into verification and audited goal completion.
 

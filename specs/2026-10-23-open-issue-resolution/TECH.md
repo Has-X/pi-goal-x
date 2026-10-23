@@ -1,5 +1,10 @@
 # Implementation plan
 
+> The default pacing design below is provisional after the user's follow-up
+> steering. Use the [continuation defaults plan](../2026-10-23-continuation-defaults-validation/TECH.md)
+> for the opt-in replacement and its release gates. The #90 implementation remains
+> independently accepted.
+
 ## Session-safe settlement (#90)
 
 Make the audit flush report whether its context is usable. Read session identity

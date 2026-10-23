@@ -2,7 +2,9 @@
 
 > Idle pacing was added by the
 > [2026-10-23 implementation](../2026-10-23-open-issue-resolution/TECH.md).
-> The original default/strict policy split and dispatch safeguards remain.
+> The [follow-up plan](../2026-10-23-continuation-defaults-validation/TECH.md)
+> makes it opt-in while preserving this original default/strict policy split
+> and its dispatch safeguards. Production revision is pending.
 
 Use the existing scheduler atomic write and claim path for inferred ready decisions. Reload effective settings at settlement/declaration/claim. Default settlement ignores repairUsed outside outstanding waits. Convert unclaimed historical repair decisions to ordinary ready before scheduling and again at claim if policy changed. Keep persisted scheduler version and historical fields compatible.
 
