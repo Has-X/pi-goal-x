@@ -1,5 +1,10 @@
 # Implicit continuation by default (#63)
 
+> Historical pacing decision superseded by the
+> [2026-10-23 open-issue resolution](../2026-10-23-open-issue-resolution/PRODUCT.md)
+> for #100. Continuation still requires no tools or declaration, but repeated
+> idle executions now back off instead of making unpaced provider requests.
+
 Successful executions of active auto-continuing goals continue immediately when the host is ready, without tool, task, progress, or disposition requirements. No inactivity delays or missing-disposition pauses apply by default. Final-task completion can continue into verification and audited goal completion.
 
 One global/project setting, strictExecutionContract, defaults false. Opting in retains explicit ready/wait decisions and one repair then pause. Default mode accepts optional ready but rejects new waits without terminating. This is a user preference, not a protocol the agent should enable to continue.

@@ -129,8 +129,11 @@ export function registerGoalEvents(core: GoalCore): void {
 			};
 		}
 		// Track Oracle work attempts; this does not authorize scheduling.
-		if (isMeaningfulProgressToolCall(event.toolName, asRecord(event)?.args)) {
+		if (isMeaningfulProgressToolCall(event.toolName, event.input)) {
 			core.goalWorkToolCalledThisTurn = true;
+			// Goal mutations are measured by content changes at settlement. A
+			// ready declaration or an unchanged task update is only bookkeeping.
+			if (event.toolName !== "update_goal" && event.toolName !== "update_goal_task") core.scheduler.recordWork();
 			// Issue #26: record a meaningful work attempt against armed Oracle
 			// advice. get_goal / echo-only reads are excluded upstream by
 			// isMeaningfulProgressToolCall.
@@ -261,6 +264,8 @@ export function registerGoalEvents(core: GoalCore): void {
 
 	pi.on("session_start", async (event, ctx) => {
 		core.auditMessages.clear();
+		continuationAfterSettleFor = null;
+		networkErrorRecoveryAfterSettleFor = null;
 		// NAF: the zero-op read caches are session-scoped — a new session always
 		// re-reads settings/pool/ledger fresh from disk (cross-process and
 		// hand-edited changes are picked up at the session boundary).
@@ -340,6 +345,8 @@ export function registerGoalEvents(core: GoalCore): void {
 
 	pi.on("session_tree", async (_event, ctx) => {
 		core.auditMessages.clear();
+		continuationAfterSettleFor = null;
+		networkErrorRecoveryAfterSettleFor = null;
 		core.goalService.flushTurn(ctx); // P1-3: persist any buffered transaction before reload
 		await core.loadState(ctx);
 		rehydrateDraft(core, ctx);
@@ -546,7 +553,7 @@ export function registerGoalEvents(core: GoalCore): void {
 	});
 
 	pi.on("agent_settled", async (_event, ctx) => {
-		core.auditMessages.flush(ctx, pi);
+		if (!core.auditMessages.flush(ctx, pi)) return;
 		const goalId = continuationAfterSettleFor;
 		continuationAfterSettleFor = null;
 		const networkErrorGoalId = networkErrorRecoveryAfterSettleFor;

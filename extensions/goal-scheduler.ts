@@ -14,6 +14,8 @@ export class GoalScheduler {
 	private armedGeneration: string | undefined;
 	private declared = false;
 	private runGoalId: string | undefined;
+	private runGoalContent: string | undefined;
+	private runHadWork = false;
 	private denied = false;
 	private unsubscribe: (() => void) | undefined;
 	private core: GoalCore;
@@ -27,6 +29,24 @@ export class GoalScheduler {
 	private implicitReady(s: GoalSchedulerState): void {
 		s.phase = "ready"; s.dispatch = undefined; s.generation = randomUUID();
 		s.decision = { kind: "ready", purpose: "ready" };
+	}
+	private goalContent(goal: GoalRecord | null): string | undefined {
+		return goal ? JSON.stringify([goal.objective, goal.sisyphus, goal.verificationContract, goal.taskList, goal.currentTaskId]) : undefined;
+	}
+	private paceIdle(s: GoalSchedulerState, goal: GoalRecord): void {
+		if (this.runHadWork || this.goalContent(goal) !== this.runGoalContent) {
+			s.idle = undefined;
+			return;
+		}
+		// One immediate reasoning-only continuation, then 30s, 60s, 120s,
+		// 240s and 300s. Saturate the streak to keep long-running state bounded.
+		const runs = Math.min(6, (s.idle?.runs ?? 0) + 1);
+		const delay = runs === 1 ? 0 : Math.min(300_000, 30_000 * 2 ** (runs - 2));
+		s.idle = { runs, nextAt: Date.now() + delay };
+	}
+	private idleDelay(s: GoalSchedulerState): number {
+		return s.phase === "ready" && s.decision?.kind === "ready" && s.decision.purpose === "ready"
+			? Math.max(0, (s.idle?.nextAt ?? 0) - Date.now()) : 0;
 	}
 	private available(ctx: ExtensionContext, s: GoalSchedulerState): boolean {
 		const limit = this.limit(ctx);
@@ -149,6 +169,7 @@ export class GoalScheduler {
 			invalidateGoalSettingsCache(); // an agent may have just configured the allowance
 			const goal = this.update(ctx, s => {
 				if (!this.available(ctx, s)) throw new Error(this.allowanceReason(ctx));
+				if (this.strict(ctx, s)) s.idle = undefined;
 				if (input.kind === "ready") {
 					s.phase = "ready"; s.decision = { kind: "ready", purpose: "ready" }; s.wait = undefined;
 				} else if (input.kind === "wait") {
@@ -186,9 +207,13 @@ export class GoalScheduler {
 		if (this.inRun) { this.core.runningGoalId = this.core.state.goal?.id ?? null; return; }
 		this.inRun = true; this.declared = false; this.denied = false;
 		this.runGoalId = this.core.state.goal?.id;
+		this.runGoalContent = this.goalContent(this.core.state.goal);
+		this.runHadWork = false;
 		this.cancelTimer(); this.core.runtime.clearContinuationTimer();
 		this.core.runningGoalId = this.core.state.goal?.id ?? null;
 	}
+	/** Work in any tool turn counts until the entire logical execution settles. */
+	recordWork(): void { if (this.inRun) this.runHadWork = true; }
 	turn(ctx: ExtensionContext): void {
 		if (!this.declared) return;
 		this.declared = false;
@@ -226,6 +251,7 @@ export class GoalScheduler {
 		this.safe(ctx, () => this.update(ctx, state => {
 			state.generation = randomUUID(); state.phase = "idle"; state.decision = undefined; state.dispatch = undefined; state.wait = undefined;
 			state.repairUsed = false;
+			state.idle = undefined;
 		}));
 	}
 	settled(ctx: ExtensionContext, successful = true): void {
@@ -235,10 +261,13 @@ export class GoalScheduler {
 		this.safe(ctx, () => {
 			const goal = this.core.state.goal;
 			if (!goal || goal.status !== "active" || !goal.autoContinue || !successful) return;
-			if (this.declared && goal.scheduler?.decision) { this.schedule(ctx); return; }
 			const s = this.state(ctx, goal);
-			if (!this.strict(ctx, s)) {
-				this.update(ctx, state => this.implicitReady(state));
+			const strict = this.strict(ctx, s);
+			if (this.declared && s.decision) {
+				if (strict || (s.decision.kind === "ready" && s.decision.purpose !== "ready")) { this.schedule(ctx); return; }
+			}
+			if (!strict) {
+				this.update(ctx, (state, current) => { this.implicitReady(state); this.paceIdle(state, current); });
 				this.schedule(ctx); return;
 			}
 			if (s.repairUsed || !this.available(ctx, s)) {
@@ -292,6 +321,12 @@ export class GoalScheduler {
 					this.later(ctx, due - Date.now(), () => this.schedule(ctx)); return;
 				}
 			}
+			const idleDelay = this.idleDelay(s);
+			if (idleDelay > 0) {
+				this.core.runtime.clearContinuationTimer();
+				this.core.clearActiveAccounting();
+				this.later(ctx, idleDelay, () => this.schedule(ctx)); return;
+			}
 			this.cancelTimer();
 			// Runtime readiness polling cannot authorize: claim() is called again at delivery.
 			this.armedGeneration = s.generation;
@@ -305,11 +340,13 @@ export class GoalScheduler {
 		invalidateGoalSettingsCache();
 		try {
 			let result: Record<string, unknown> | null = null;
+			let deferred = false;
 			this.update(ctx, (s, g) => {
 				if (s.generation !== generation) throw new Error("Scheduling generation changed.");
 				if (g.status !== "active" || !g.autoContinue || budgetReached(g) || !this.available(ctx, s)) throw new Error(this.allowanceReason(ctx));
 				if (s.wait && Date.now() >= s.wait.deadline) throw new Error("Wait deadline reached.");
 				if (s.phase === "ready" && s.decision?.kind === "ready" && s.decision.purpose === "repair" && !this.strict(ctx, s)) this.implicitReady(s);
+				if (this.idleDelay(s) > 0) { deferred = true; return; }
 				let kind = s.phase === "ready" && s.decision?.kind === "ready" ? s.decision.purpose : undefined;
 				if (s.phase === "waiting" && s.wait) {
 					if (s.wait.signalled) kind = "wake";
@@ -322,6 +359,7 @@ export class GoalScheduler {
 				if (s.wait) { s.wait.signalled = false; s.wait.token = randomUUID(); }
 				result = { generation: s.generation, dispatchId: s.dispatch.id };
 			});
+			if (deferred) this.schedule(ctx);
 			return result;
 		} catch (error) {
 			const current = this.core.state.goal?.scheduler;
@@ -333,6 +371,9 @@ export class GoalScheduler {
 	failedDispatch(ctx: ExtensionContext): void {
 		this.safe(ctx, () => this.pause(ctx, "Goal checkpoint delivery failed after claiming allowance. Use /goal-resume; it will not be replayed."));
 	}
-	isWaiting(): boolean { return !this.inRun && this.core.state.goal?.scheduler?.phase === "waiting"; }
+	isWaiting(): boolean {
+		const s = this.core.state.goal?.scheduler;
+		return !this.inRun && !!s && (s.phase === "waiting" || this.idleDelay(s) > 0);
+	}
 	isDenied(): boolean { return this.denied; }
 }

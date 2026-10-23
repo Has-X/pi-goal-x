@@ -4,7 +4,11 @@ For installation, goal workflows, commands and the settings overview, see the [R
 
 ## Automatic continuation and optional execution contracts
 
-Active goals continue automatically after successful executions, including reasoning-only responses and final-task verification. No tool call, task update, scheduling declaration, or cooldown is required. Unproductive loops remain possible; optional run limits and token budgets still apply.
+Active goals continue automatically after successful executions, including reasoning-only responses and final-task verification. No tool call, task update, or scheduling declaration is required.
+
+In default mode, one execution without observed work continues immediately. Repeated idle executions wait 30, 60, 120, 240, then 300 seconds between continuations, so a response such as “Standing by” cannot cause a rapid provider-request loop. The goal stays active. Work observed anywhere in the execution or a change to its objective, requirements, or tasks resets the delay. Goal inspection, echo-only calls, accounting and scheduling declarations alone do not reset it. Custom tools can continue even when their activity is not recognized as work; those executions may also be paced.
+
+Pacing is saved across reloads and shown as `Idle continuation paced; next check: …` in goal status and the dashboard. Waiting spends no autonomous runs or active time. `/goal-resume` and incoming user/producer messages take effect promptly; producer messages remain ordinary host work outside the extension's allowance. Optional run limits and token budgets still apply. Explicit strict-mode ready/wait decisions retain their existing timing.
 
 Enable `strictExecutionContract: true` in `/goal-settings` or your global/project settings to require explicit ready/wait decisions. In that mode, a missing decision permits one repair prompt within the remaining allowance, then pauses. This is a user preference; agents should not enable it merely to continue.
 

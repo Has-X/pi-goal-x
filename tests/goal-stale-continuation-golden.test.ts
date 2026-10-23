@@ -385,7 +385,7 @@ test("successful agent_end waits for agent_settled before queuing a continuation
 	}
 });
 
-test("empty no-tool runs continue implicitly after agent_settled", async () => {
+test("empty no-tool runs continue implicitly, with pacing after repeated idle settlement", async () => {
 	const { cwd, goal } = fixtureCwd();
 	const h = createHarness(cwd);
 	try {
@@ -406,8 +406,12 @@ test("empty no-tool runs continue implicitly after agent_settled", async () => {
 		await h.handlers["message_start"]!({ message: { ...h.sentMessages.at(-1), role: "custom" } }, idleCtx(h.ctx));
 		await h.handlers["agent_end"]!({ messages: [{ role: "assistant", stopReason: "end_turn", content: [{ type: "text", text: "Still no action." }] }] }, idleCtx(h.ctx));
 		await h.handlers["agent_settled"]!({}, idleCtx(h.ctx));
-		assert.equal(await countCheckpoints(h), 2, "missing declarations never require repair in default mode");
+		assert.equal(await countCheckpoints(h), 1, "repeated idle replies defer the next checkpoint");
 		assert.equal(h.core.state.goal?.status, "active");
+		assert.equal(h.core.state.goal?.scheduler?.phase, "ready", "continuation stays authorized without a declaration");
+		assert.equal(h.core.state.goal?.scheduler?.repairUsed, false, "default mode does not require repair");
+		assert.equal(h.core.state.goal?.scheduler?.idle?.runs, 2);
+		assert.ok(h.core.state.goal!.scheduler!.idle!.nextAt > Date.now());
 	} finally {
 		h.core.scheduler.shutdown();
 		h.core.runtime.clearContinuationState();

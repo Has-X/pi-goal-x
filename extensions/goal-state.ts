@@ -260,8 +260,8 @@ export function createGoalCore(
 	let dashboardExpanded = false;
 
 	// Per-turn flags reset in turn_start (#4, C9 fix).
-	// goalWorkToolCalledThisTurn: tracks whether a real goal-work tool was called.
-	//   If false at turn_end, we don't queue another autoContinue (empty chat turn).
+	// goalWorkToolCalledThisTurn: tracks meaningful work attempts for Oracle.
+	// Scheduler idle pacing accumulates activity across the whole logical run.
 	// turn-stop guard, stale checkpoint, continuation scheduling, and one-time
 	// steering reminders live in `runtime` (extensions/goal-runtime.ts);
 	// token/time accounting lives in `accounting` (extensions/goal-accounting.ts).

@@ -249,6 +249,20 @@ token/time intervals per turn; a goal never double-charges the same interval.
 `GoalRuntime` (goal-runtime.ts) owns continuation scheduling, the stale
 checkpoint state, the turn-stop guard, and one-shot steering reminders.
 
+`GoalScheduler` persists dispatch intent and allowance consumption. In default
+mode it also persists a bounded idle streak and the earliest next continuation
+time. One execution without observed work continues immediately; further idle
+executions use a 30-second exponential delay capped at five minutes. Work
+attempts accumulate across all turns in the logical run, while content snapshots
+detect goal/task changes without treating usage, revisions or scheduler writes
+as progress. The delay is checked again at dispatch admission. Resume and genuine
+host input reset pacing; strict contracts and provider recovery retain their
+separate scheduling paths.
+
+Audit display messages flush only at idle settlement and remain scoped to their
+session. If Pi has invalidated a settlement context, the handler skips it before
+consuming continuation intent or changing the replacement session's queue.
+
 An optional `token_budget` may be set at creation. When accounted usage
 reaches the budget, `accountProgress` transitions the goal to the distinct
 `budget_limited` status exactly once (status leaves `active`, so accounting

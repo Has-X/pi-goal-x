@@ -16,6 +16,13 @@ commands:
   finish: /spec-finish [spec-id-or-path]
   settings: /specs-settings
 specs:
+  - id: 2026-10-23-open-issue-resolution
+    path: specs/2026-10-23-open-issue-resolution
+    title: Resolve stale audit settlement and idle continuation loops
+    status: completed
+    focused: false
+    last_audit: null
+    updated: 2026-10-23
   - id: 2026-05-13-drafting-runtime-simplification
     path: specs/2026-05-13-drafting-runtime-simplification
     title: Simplify goal drafting while hardening runtime execution and audit

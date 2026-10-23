@@ -4,6 +4,11 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Skip audit-message settlement callbacks whose Pi context was invalidated by session replacement or reload, preserving replacement-session messages and scheduling intent (#90).
+- Pace repeated default-mode idle executions instead of immediately dispatching another provider request (#100). One execution without observed work continues immediately; subsequent idle continuations wait 30 seconds, doubling up to five minutes. Pacing survives reloads, excludes bookkeeping from progress, and resets after work, goal/task changes, user resume, or producer input. Strict contracts, budgets and dispatch admission retain their existing safeguards.
+
 ## [0.32.3] — 2026-10-02
 
 ### Fixed

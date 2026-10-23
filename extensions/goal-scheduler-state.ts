@@ -21,6 +21,8 @@ export interface GoalSchedulerState {
 	wait?: GoalWait;
 	dispatch?: { id: string; kind: GoalDispatchKind; claimedAt: number };
 	repairUsed: boolean;
+	/** Default-mode idle pacing, independent of the explicit wait protocol. */
+	idle?: { runs: number; nextAt: number };
 }
 export type GoalContinuation =
 	| { kind: "ready" }
@@ -39,6 +41,7 @@ export function normalizeGoalScheduler(raw: unknown): GoalSchedulerState | undef
 	const integer = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
 	const text = (v: unknown) => typeof v === "string" && v.length > 0 && v.length <= 2000;
 	if (s.version !== 1 || !text(s.owner) || !text(s.generation) || !integer(s.used) || typeof s.repairUsed !== "boolean" || !["idle", "ready", "waiting", "claimed", "running", "interrupted"].includes(s.phase)) return invalid();
+	if (s.idle !== undefined && (!s.idle || typeof s.idle !== "object" || !integer(s.idle.runs) || s.idle.runs < 1 || s.idle.runs > 6 || !integer(s.idle.nextAt) || s.idle.nextAt > 8_640_000_000_000_000)) return invalid();
 	// Goals saved before next actions were removed still carry decision.nextAction.
 	// The field is stripped after validation and never makes a goal invalid:
 	// rejecting one would strand it as interrupted with spent allowance.
@@ -73,6 +76,9 @@ export function schedulerSummaryParts(s: GoalSchedulerState | undefined, limit?:
 	const runs = limit !== undefined && showRuns ? `Autonomous runs: ${s?.used ?? 0}/${limit}${limit === 0 ? " (automatic continuation disabled)" : ""}.` : "";
 	const lines: string[] = [];
 	if (s) {
+		if (s.phase === "ready" && s.decision?.kind === "ready" && s.decision.purpose === "ready" && s.idle && s.idle.nextAt > Date.now()) {
+			lines.push(`Idle continuation paced; next check: ${new Date(s.idle.nextAt).toISOString()}.`);
+		}
 		if (s.wait) {
 			lines.push(`Waiting: ${s.wait.reason}; wait_id=${s.wait.id}; deadline=${new Date(s.wait.deadline).toISOString()}.`);
 			if (s.wait.nextCheckAt !== undefined) lines.push(`Next check: ${new Date(s.wait.nextCheckAt).toISOString()}; ${s.wait.remainingChecks} checks remaining.`);
