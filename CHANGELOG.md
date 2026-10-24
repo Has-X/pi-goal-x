@@ -4,6 +4,10 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-10-24
+
+Includes #105 and #106.
+
 ### Added
 
 - A Controls screen in `/goal-settings` for command names and aliases, every public goal shortcut, goal-dialog keys and project/global inheritance. Commands can use subcommands such as `/goal edit`; `/goal-settings` stays available for recovery.
@@ -20,7 +24,7 @@ All notable changes to pi-goal-x are documented here.
 
 - Skip audit-message settlement callbacks whose Pi context was invalidated by session replacement or reload, preserving replacement-session messages and scheduling intent (#90).
 - Goal execution requests use the current Pi prompt and tool profile from their first request, including direct creation, draft confirmation, resume and reload. This fixes stale or missing prompt guidance on structured-transcript hosts without changing host internals.
-- Restore immediate continuation by default. Optional `idleContinuationBackoff` slows repeated replies without recognized work, with saved delays, live opt-out and unchanged run accounting (#100). It is off by default and does not guarantee loop termination.
+- Restore immediate continuation by default. Enable **slow repeated idle replies (opt-in)** in `/goal-settings` → **Advanced execution** (`idleContinuationBackoff: true`) to slow repeated idle replies (#100). Delays persist and can be disabled live. Set a finite `maxAutonomousRuns` for a hard stop; pacing alone does not guarantee loop termination.
 - Expose the project/global settings scope switch and keep delay timing and resume controls visible in the compact widget.
 
 ## [0.32.3] — 2026-10-02
