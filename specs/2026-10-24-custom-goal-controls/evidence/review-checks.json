@@ -74,7 +74,7 @@
       ]
     }
   ],
-  "workflowTests": 9,
+  "workflowTests": 11,
   "rankingTests": 5,
   "actionlint": "1.7.12",
   "typecheck": "passed",
@@ -88,5 +88,31 @@
     "elapsedSeconds": 226,
     "jobSeconds": 552
   },
-  "newActionsJobs": 3
+  "newActionsJobs": 3,
+  "pathCorrectedRun": {
+    "tests": 1186,
+    "skips": 0,
+    "localExecutableRegression": "passed",
+    "skipRejectionRegression": "passed",
+    "suites": [
+      {
+        "name": "tests",
+        "passed": true,
+        "code": 0,
+        "elapsedMs": 49208
+      },
+      {
+        "name": "controls-cli",
+        "passed": true,
+        "code": 0,
+        "elapsedMs": 68470
+      },
+      {
+        "name": "lifecycle-cli",
+        "passed": true,
+        "code": 0,
+        "elapsedMs": 2298
+      }
+    ]
+  }
 }

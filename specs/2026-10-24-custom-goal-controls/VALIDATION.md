@@ -47,6 +47,13 @@ npm audit --omit=dev
 Review evidence is in `evidence/review-*.json` and `evidence/terminal/review/`.
 The original implementation evidence below is retained.
 
+The first hosted three-job run exposed two RPC tests silently skipping when
+invoked outside npm. The runner now adds the checkout's local executables to
+PATH and rejects skipped tests or a missing summary. Its corrected local run
+passed all 1,186 tests with zero skips, all ten terminal cases, and eleven
+workflow/publication tests. Both executable discovery and skip rejection have
+regression tests; the earlier timing samples above remain historical evidence.
+
 2026-10-24. Base: `codex/continuation-defaults-and-prompt-profile` at 1e7a693.
 Development SDK: Pi 1.4.0, also verified as the current npm release. No PR patch,
 branch or contributor code was fetched or reused.
