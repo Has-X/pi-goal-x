@@ -1,3 +1,4 @@
+import { commandHint, commandInstructions } from "./goal-controls.ts";
 import { cacheGoalHistory } from "./goal-prompt-cache.ts";
 import { registerGoalPromptProfile } from "./goal-prompt-profile.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -112,7 +113,7 @@ export function registerGoalEvents(core: GoalCore): void {
 	// #4 + C9 fix + Phase 5 C3: gate in-turn tool calls based on lifecycle state.
 	pi.on("tool_call", async (event, ctx) => {
 		const stoppedGoalId = core.currentTurnStoppedGoalId();
-		if (core.scheduler.isDenied()) return { block: true, reason: "Stale goal dispatch; use /goal-resume." };
+		if (core.scheduler.isDenied()) return { block: true, reason: `Stale goal dispatch; use ${commandHint("goal-resume", core.loadedCommands)}.` };
 		// Post-stop in-turn block: after update_goal / set_goal_tasks (or a user
 		// lifecycle command) fires in this turn, block all subsequent tool calls
 		// except read-only inspection.
@@ -174,12 +175,13 @@ export function registerGoalEvents(core: GoalCore): void {
 		const tokens = assistantTurnTokens(message);
 		core.touchGoalActivity(); // F5
 		core.accountProgress(ctx, { completedTurnTokens: tokens });
+		core.interruption.finishTurn(ctx);
 
 		if (isAbortedAssistantMessage(message)) {
 			// Pause only on a genuine user abort (signal fired). A provider- or
 			// transport-side abort without the signal routes into recovery via
 			// agent_end instead of stranding the goal.
-			if (ctx.signal?.aborted) core.pauseActiveGoal(ctx);
+			if (ctx.signal?.aborted && !core.interruption.ignoreAbort() && !core.interruption.isHeld()) core.pauseActiveGoal(ctx);
 			return;
 		}
 		// Provider failures are not completed work: do not turn one failed turn
@@ -262,7 +264,7 @@ export function registerGoalEvents(core: GoalCore): void {
 	pi.on("message_end", async (event, ctx) => {
 		// Signal-aware: see turn_end — only user aborts pause; provider-side
 		// aborts are handled by agent_end's recovery path.
-		if (isAbortedAssistantMessage(event.message) && ctx.signal?.aborted) core.pauseActiveGoal(ctx);
+		if (isAbortedAssistantMessage(event.message) && ctx.signal?.aborted && !core.interruption.ignoreAbort() && !core.interruption.isHeld()) core.pauseActiveGoal(ctx);
 		const raw = asRecord(event.message);
 		if (raw?.role === "custom" && raw.customType === GOAL_EVENT_ENTRY && raw.display !== false) {
 			return { message: { ...event.message, display: false } as typeof event.message };
@@ -270,6 +272,10 @@ export function registerGoalEvents(core: GoalCore): void {
 	});
 
 	pi.on("session_start", async (event, ctx) => {
+		core.interruption.settled();
+		core.interruption.reset();
+		if (ctx.hasUI) ctx.ui.setStatus("goal-interrupt", undefined);
+		if (core.controlWarnings?.length) ctx.ui.notify(`Goal command settings were not applied: ${core.controlWarnings.join(" ")} Open /goal-settings controls to correct them.`, "warning");
 		core.auditMessages.clear();
 		continuationAfterSettleFor = null;
 		networkErrorRecoveryAfterSettleFor = null;
@@ -351,6 +357,9 @@ export function registerGoalEvents(core: GoalCore): void {
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
+		core.interruption.reset();
+		core.interruption.settled();
+		if (ctx.hasUI) ctx.ui.setStatus("goal-interrupt", undefined);
 		core.auditMessages.clear();
 		continuationAfterSettleFor = null;
 		networkErrorRecoveryAfterSettleFor = null;
@@ -369,6 +378,7 @@ export function registerGoalEvents(core: GoalCore): void {
 		// expose only prompt, so read the shared public trigger shapes here.
 		const trigger = event as unknown as { prompt?: string; message?: { customType?: string; details?: unknown; content?: unknown } };
 		const incomingGoalId = trigger.message ? goalEventMessageId(trigger.message) : extractGoalIdFromInjectedMessage(trigger.prompt ?? "");
+		if (!trigger.message && !incomingGoalId) core.interruption.continueWithUser(ctx);
 
 		// If this turn was triggered by a hidden goal checkpoint that no longer
 		// matches the active goal, abort the whole turn instead of letting the
@@ -423,7 +433,7 @@ export function registerGoalEvents(core: GoalCore): void {
 			if (loadGoalSettings(ctx.cwd).hideUnfocusedPrompt === true) return;
 			const openCount = otherOpenGoalCount(core.goalsById, null);
 			if (openCount > 0) {
-				return { state: unfocusedOpenGoalsPrompt(openCount) };
+				return { state: commandInstructions(unfocusedOpenGoalsPrompt(openCount), core.loadedCommands) };
 			}
 			return;
 		}
@@ -447,7 +457,7 @@ export function registerGoalEvents(core: GoalCore): void {
 			} catch {
 				// Ledger read failure should not break the prompt
 			}
-		return { state: `[PI GOAL PAUSED goalId=${current.id}]\n${untrustedObjectiveBlock(current)}${pauseExtras.join("\n")}${auditorExtra}\n\nThe goal is paused. Do not autonomously continue substantive work unless the user resumes it with /goal-resume. If the user explicitly asks to finish the paused goal and the objective is already satisfied based on available evidence, you may call update_goal({status: "complete"}). To abandon a goal, the user runs /goal-clear. Do not report the goal blocked in response to a pause.` };
+		return { state: `[PI GOAL PAUSED goalId=${current.id}]\n${untrustedObjectiveBlock(current)}${pauseExtras.join("\n")}${auditorExtra}\n\nThe goal is paused. Do not autonomously continue substantive work unless the user resumes it with ${commandHint("goal-resume", core.loadedCommands)}. If the user explicitly asks to finish the paused goal and the objective is already satisfied based on available evidence, you may call update_goal({status: "complete"}). To abandon a goal, the user runs ${commandHint("goal-clear", core.loadedCommands)}. Do not report the goal blocked in response to a pause.` };
 		}
 		// Token-budget-limited goals get one-time wrap-up steering: summarize,
 		// do not start new substantive work, never claim completion unless real.
@@ -462,17 +472,17 @@ export function registerGoalEvents(core: GoalCore): void {
 					: ` — ${formatTokenValue(remaining)} remaining`
 				: "";
 			const reminder = core.runtime.consumePostBudgetReminder()
-				? `\n\n[TOKEN BUDGET REACHED goalId=${limitedGoal.id}]\nThe goal's lifetime token-spending cap (not context capacity) has been reached${budgetText ? ` (${budgetText}${balanceText})` : ""}. Wrap up the current work in one final response: summarize what was accomplished and what remains, do not start new substantive work, and do not claim the goal is complete unless it actually is. To continue, the user can use /goal-tweak to raise or remove the token budget.`
+				? `\n\n[TOKEN BUDGET REACHED goalId=${limitedGoal.id}]\nThe goal's lifetime token-spending cap (not context capacity) has been reached${budgetText ? ` (${budgetText}${balanceText})` : ""}. Wrap up the current work in one final response: summarize what was accomplished and what remains, do not start new substantive work, and do not claim the goal is complete unless it actually is. To continue, the user can use ${commandHint("goal-tweak", core.loadedCommands)} to raise or remove the token budget.`
 				: "";
 		return { state: `[PI GOAL BUDGET LIMITED goalId=${limitedGoal.id}]\n${untrustedObjectiveBlock(limitedGoal)}${budgetText ? `\n${budgetText}` : ""}${reminder}` };
 		}
   if (core.state.goal.status === "blocked") {
    const blocked = core.state.goal;
-   return { state: `[PI GOAL BLOCKED goalId=${blocked.id}]\n${untrustedObjectiveBlock(blocked)}\nBlocker: ${blocked.pauseReason ?? "unspecified"}\nThe goal is blocked; the user must run /goal-resume before goal work continues.` };
+   return { state: `[PI GOAL BLOCKED goalId=${blocked.id}]\n${untrustedObjectiveBlock(blocked)}\nBlocker: ${blocked.pauseReason ?? "unspecified"}\nThe goal is blocked; the user must run ${commandHint("goal-resume", core.loadedCommands)} before goal work continues.` };
   }
 		const activeGoal = core.state.goal;
 		const settings = loadGoalSettings(ctx.cwd);
-		const { state: policy, counters } = goalPromptParts(activeGoal, settings, ctx.getContextUsage?.());
+		const { state: policy, counters } = goalPromptParts(activeGoal, { ...settings, commands: core.loadedCommands }, ctx.getContextUsage?.());
 		// Rare transitional steering rides in the stable block; per-turn usage and
 		// scheduling counters stay in the volatile block so retention grows slowly.
 		let state = policy;
@@ -533,8 +543,9 @@ export function registerGoalEvents(core: GoalCore): void {
 		// transport-side termination (e.g. after Pi exhausts its retries) —
 		// pausing there stranded goals during outages, so it routes into the
 		// same bounded recovery as classified transient errors instead.
+		if (core.interruption.isHeld() || core.interruption.ignoreAbort()) return;
 		if (ctx.signal?.aborted) {
-			core.pauseActiveGoal(ctx);
+			if (!core.interruption.ignoreAbort() && !core.interruption.isHeld()) core.pauseActiveGoal(ctx);
 			return;
 		}
 		// Provider failures are not completed work: persist and refresh the
@@ -568,16 +579,21 @@ export function registerGoalEvents(core: GoalCore): void {
 		continuationAfterSettleFor = null;
 		const networkErrorGoalId = networkErrorRecoveryAfterSettleFor;
 		networkErrorRecoveryAfterSettleFor = null;
+		const resumedInterruptedTurn = core.interruption.ignoreAbort() && !core.interruption.isHeld();
 		// Current Pi reports startup cancellation even when no assistant message
 		// or live request signal remains. Older hosts omit this field.
 		if ((event as unknown as { aborted?: boolean }).aborted === true) {
 			const abortedGoalId = goalId ?? networkErrorGoalId ?? core.runningGoalId;
 			core.runningGoalId = null;
-			if (abortedGoalId && core.state.goal?.id === abortedGoalId && core.state.goal.status === "active") core.pauseActiveGoal(ctx);
+			if (abortedGoalId && !core.interruption.ignoreAbort(abortedGoalId) && !core.interruption.isHeld(abortedGoalId) && core.state.goal?.id === abortedGoalId && core.state.goal.status === "active") core.pauseActiveGoal(ctx);
 			core.scheduler.settled(ctx, false);
+			core.interruption.settled();
+			if (resumedInterruptedTurn) core.scheduler.schedule(ctx);
 			return;
 		}
+		core.interruption.settled();
 		core.scheduler.settled(ctx, !!goalId && core.isActionableContinuationGoal(goalId));
+		if (resumedInterruptedTurn) core.scheduler.schedule(ctx);
 		if (goalId && core.isActionableContinuationGoal(goalId)) return;
 		if (!networkErrorGoalId || !core.isActionableContinuationGoal(networkErrorGoalId)) return;
 		const recovery = loadGoalSettings(ctx.cwd).networkRecovery;
@@ -601,6 +617,8 @@ export function registerGoalEvents(core: GoalCore): void {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		core.interruption.reset();
+		core.interruption.settled();
 		core.auditMessages.clear();
 		core.scheduler.shutdown();
 		continuationAfterSettleFor = null;

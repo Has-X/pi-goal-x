@@ -1,3 +1,4 @@
+import type { GoalCommands } from "../goal-controls.ts";
 import { schedulerSummaryParts } from "../goal-scheduler-state.ts";
 import { taskIndex } from "../goal-task-index.ts";
 /**
@@ -103,6 +104,7 @@ export interface DashboardTaskNode {
 }
 
 export interface GoalDashboardModelOptions {
+	commands?: GoalCommands;
 	maxAutonomousRuns?: number;
 	idleContinuationBackoff?: boolean;
 	/** Report the runs line for a finite allowance (default on). */
@@ -477,6 +479,7 @@ export function deriveGoalDashboardModel(
 	const { focused, otherOpenGoals, ledgerEvents = [], activityLimit, tasksDisabled = false } = options;
 
 	const status = deriveGoalStatus(goal);
+	if (goal.status === "active" && goal.scheduler?.phase === "interrupted") { status.code = "idle"; status.label = "Waiting for you"; status.footerLabel = "waiting for you"; }
 	if (goal.status === "active" && goal.scheduler?.phase === "waiting") { status.code = "idle"; status.label = "Waiting"; status.footerLabel = "waiting"; }
 	// §9.5: with tasks disabled, omit task sections entirely (status,
 	// verification, usage, path, and focus remain).
@@ -501,7 +504,7 @@ export function deriveGoalDashboardModel(
 	if (goal.usage.activeSeconds > 0) footerUsageBits.push(formatDuration(goal.usage.activeSeconds));
 	if (goal.usage.tokensUsed > 0) footerUsageBits.push(formatCompactTokens(goal.usage.tokensUsed));
 
-	const scheduling = schedulerSummaryParts(goal.scheduler, options.maxAutonomousRuns, options.showAutonomousRuns !== false, options.idleContinuationBackoff === true);
+	const scheduling = schedulerSummaryParts(goal.scheduler, options.maxAutonomousRuns, options.showAutonomousRuns !== false, options.idleContinuationBackoff === true, options.commands);
 	return {
 		scheduling: [scheduling.runs, ...scheduling.instructions.split("\n")].filter(Boolean),
 		idlePacing: scheduling.idlePacing,

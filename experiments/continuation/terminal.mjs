@@ -14,6 +14,7 @@ const production=process.env.PI_GOAL_TERMINAL_SOURCE==='production';
 const agentDir=path.join(cwd,'agent');
 fs.mkdirSync(agentDir,{recursive:true});
 const requests=[];
+let askedQuestions=false;
 const objective=`Create greeting.txt containing exactly Hello from goal followed by a newline. Verify it${production?'': ' and finish with the completion auditor'}.`;
 const server=http.createServer(async(req,res)=>{
  let body='';for await(const chunk of req)body+=chunk;
@@ -25,7 +26,13 @@ const server=http.createServer(async(req,res)=>{
  try{const local=JSON.parse(fs.readFileSync(path.join(cwd,'.pi/pi-goal-x-settings.json'),'utf8'));if(local.idleContinuationBackoff!==undefined)optedIn=local.idleContinuationBackoff===true;}catch{ /* Missing project layer inherits global. */ }
  let action;
  if(auditor){const ok=fs.existsSync(path.join(cwd,'greeting.txt'))&&fs.readFileSync(path.join(cwd,'greeting.txt'),'utf8')==='Hello from goal\n';action={text:ok?'The requested file is correct.\n<approved/>':'The file is missing or incorrect.\n<disapproved/>'};}
- else if(names.includes('propose_goal_draft'))action={tool:'propose_goal_draft',args:{objective,sisyphus:false}};
+ else if(names.includes('propose_goal_draft')&&scenario==='dialog-text'&&!askedQuestions){
+  askedQuestions=true;
+  action={tool:'goal_questionnaire',args:{questions:[{id:'first',question:'First answer?',options:[]},{id:'second',question:'Second answer?',options:[]}]}};
+ }
+ else if(names.includes('propose_goal_draft'))action=/Goal draft refinement requested|Draft cancelled/.test(JSON.stringify(payload.messages.at(-1)))
+  ? {text:"Tell me what you would like to change."}
+  : {tool:'propose_goal_draft',args:{objective,sisyphus:false}};
  else if(scenario==='idle-opt-out'&&optedIn)action={text:'Standing by.'};
  else if(!fs.existsSync(path.join(cwd,'greeting.txt')))action={tool:'write',args:{path:'greeting.txt',content:'Hello from goal\n'}};
  else action={tool:'update_goal',args:{status:'complete'}};
@@ -47,7 +54,13 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 fs.writeFileSync(path.join(agentDir,'settings.json'),JSON.stringify({defaultProvider:'fixture',defaultModel:'fixture',compaction:{enabled:false},retry:{enabled:false}}));
 fs.writeFileSync(path.join(agentDir,'models.json'),JSON.stringify({providers:{fixture:{baseUrl:`http://127.0.0.1:${server.address().port}/v1`,api:'openai-completions',apiKey:'fixture',models:[{id:'fixture',name:'Fixture',contextWindow:200000,maxTokens:512}]}}}));
 fs.writeFileSync(path.join(cwd,'actions.jsonl'),'');
-const config={cwd,raw:path.join(cwd,'terminal.bin'),actions:path.join(cwd,'actions.jsonl'),env:{PI_CODING_AGENT_DIR:agentDir,PI_GOAL_GLOBAL_SETTINGS_FILE:globalFile,PI_OFFLINE:'1',TERM:'xterm-256color'},argv:[process.execPath,piCLI,'--offline','-ne','-ns','-np','-nc','--no-themes','--approve','-e',path.join(production?repository:roots.candidate,'extensions/goal.ts'),'--session-dir',path.join(cwd,'sessions')]};
+const observerArgs=[];
+if(process.env.PI_GOAL_TERMINAL_READY_FILE){
+ const observer=path.join(cwd,'ready-observer.mjs');
+ fs.writeFileSync(observer,`import fs from 'node:fs';\nexport default function(pi){pi.on('session_start',()=>fs.writeFileSync(${JSON.stringify(process.env.PI_GOAL_TERMINAL_READY_FILE)},'ready\\n'));}\n`);
+ observerArgs.push('-e',observer);
+}
+const config={cwd,raw:path.join(cwd,'terminal.bin'),actions:path.join(cwd,'actions.jsonl'),env:{PI_CODING_AGENT_DIR:agentDir,PI_GOAL_GLOBAL_SETTINGS_FILE:globalFile,PI_OFFLINE:'1',TERM:'xterm-256color'},argv:[process.execPath,piCLI,'--offline','-ne','-ns','-np','-nc','--no-themes','--approve','-e',path.join(production?repository:roots.candidate,'extensions/goal.ts'),...observerArgs,'--session-dir',path.join(cwd,'sessions')]};
 fs.writeFileSync(path.join(cwd,'host.json'),JSON.stringify({sdk:piVersion,cli:piCLI})+'\n');
 fs.writeFileSync(path.join(cwd,'config.json'),JSON.stringify(config));
 console.log(JSON.stringify({cwd,actions:config.actions,raw:config.raw,objective}));
