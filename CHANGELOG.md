@@ -4,6 +4,17 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Require Pi 1.4 or newer (1.x) and Node 22.19 or newer. Use native prompt preparation and remove older-host compatibility checks.
+
+### Fixed
+
+- Reject stale goal checkpoints without pausing or changing the replacement goal; valid saved work can continue after rejection (#104).
+- Preserve Pi's system prompt and tool deltas from the first request, including across goal context filtering, model changes and compaction (#97).
+- Accept matching redundant task arguments and empty optional task IDs; reject conflicting fields and malformed batches without partial changes (#91, #92).
+- Retry brief Windows sharing failures during atomic file replacement, with bounded delays and cleanup of failed temporary writes (#94).
+
 ## [0.33.0] — 2026-10-24
 
 Includes #105 and #106.
