@@ -19,9 +19,9 @@ specs:
   - id: 2026-10-24-runtime-reliability
     path: specs/2026-10-24-runtime-reliability
     title: Stale-run isolation, context preservation, tool inputs and Windows writes
-    status: implementing
+    status: ready_for_review
     focused: false
-    last_audit: null
+    last_audit: 2026-10-24
     updated: 2026-10-24
   - id: 2026-10-24-release-0-33-0
     path: specs/2026-10-24-release-0-33-0

@@ -90,18 +90,3 @@ jobs:
             experiments/runs/goal-controls/
           retention-days: 5
           if-no-files-found: ignore
-
-  windows-pr-validation:
-    name: Windows storage (this PR only)
-    if: github.event_name == 'pull_request' && github.head_ref == 'codex/runtime-reliability-and-tool-inputs'
-    runs-on: windows-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.19.0
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: Native sharing violations and atomic storage
-        run: node --experimental-strip-types --test tests/goal-atomic-rename.test.ts tests/windows/atomic-rename.test.ts
