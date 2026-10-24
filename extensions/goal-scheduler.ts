@@ -115,11 +115,11 @@ export class GoalScheduler {
 			if (raw && this.ctx) this.signal(this.ctx, raw.goalId, raw.waitToken);
 		});
 	}
-	shutdown(): void { this.cancelTimer(); this.unsubscribe?.(); this.unsubscribe = undefined; this.ctx = undefined; }
+	shutdown(): void { this.cancelTimer(); this.unsubscribe?.(); this.unsubscribe = undefined; this.ctx = undefined; this.denied = false; }
 
 	restore(ctx: ExtensionContext): void {
 		this.attach(ctx);
-		this.inRun = false; this.declared = false; this.runGoalId = undefined;
+		this.inRun = false; this.declared = false; this.runGoalId = undefined; this.denied = false;
 		this.cancelTimer();
 		this.safe(ctx, () => {
 			this.core.reconcileFocusedGoalFromDisk(ctx);
@@ -171,7 +171,9 @@ export class GoalScheduler {
 		} catch (error) { ctx.ui.notify(String(error), "warning"); return false; }
 	}
 	kickoff(ctx: ExtensionContext): void {
-		if (this.inRun) return; // creating a goal within a user run needs no extra run
+		// A goal created in ordinary user work can finish in that run. Replacing
+		// another run's goal needs its own saved kickoff and fresh attribution.
+		if (this.inRun && (!this.runGoalId || this.runGoalId === this.core.state.goal?.id)) return;
 		this.safe(ctx, () => {
 			const goal = this.core.state.goal;
 			if (!goal || goal.status !== "active" || !goal.autoContinue) return;
@@ -219,10 +221,22 @@ export class GoalScheduler {
 		} catch (error) { return { content: [{ type: "text", text: `Scheduling decision NOT saved: ${error instanceof Error ? error.message : String(error)}` }], details: { error: true }, terminate: false }; }
 	}
 
+	/** Reject an internal dispatch without giving its cancellation to the focused goal. */
+	rejectCheckpoint(ctx: ExtensionContext): void {
+		this.denied = true;
+		this.cancelTimer();
+		this.core.runtime.clearContinuationTimer();
+		this.core.runningGoalId = null;
+		ctx.abort?.();
+	}
+
 	/** One logical run can contain multiple agent_start events during native retry/compaction. */
 	begin(ctx: ExtensionContext): void {
 		this.ctx = ctx;
-		if (this.inRun) { this.core.runningGoalId = this.core.state.goal?.id ?? null; return; }
+		// Native custom-turn preparation can reject a checkpoint before agent_start.
+		// Its later lifecycle events still belong to that rejected dispatch.
+		if (this.denied) return;
+		if (this.inRun) { this.core.runningGoalId = this.runGoalId ?? null; return; }
 		this.inRun = true; this.declared = false; this.denied = false;
 		this.runGoalId = this.core.state.goal?.id;
 		this.runPacingEnabled = loadGoalSettings(ctx.cwd).idleContinuationBackoff === true;
@@ -239,6 +253,7 @@ export class GoalScheduler {
 		this.safe(ctx, () => this.update(ctx, s => { s.decision = undefined; s.phase = "idle"; s.dispatch = undefined; }));
 	}
 	message(ctx: ExtensionContext, rawMessage: unknown): void {
+		if (this.denied) return;
 		const msg = asRecord(rawMessage);
 		if (!msg || !["user", "custom"].includes(String(msg.role))) return;
 		if (msg.customType === "pi-goal-audit-event") return;
@@ -252,9 +267,8 @@ export class GoalScheduler {
 					s.phase = "running";
 				});
 			} catch (error) {
-				this.denied = true;
+				this.rejectCheckpoint(ctx);
 				this.core.runtime.setCheckpoint(String(d?.goalId ?? "invalid"));
-				ctx.abort?.();
 				ctx.ui.notify(`Goal checkpoint rejected: ${String(error)}`, "warning");
 			}
 			return;
@@ -275,7 +289,15 @@ export class GoalScheduler {
 	}
 	settled(ctx: ExtensionContext, successful = true): void {
 		this.inRun = false;
-		if (this.denied || (this.runGoalId && this.core.state.goal?.id !== this.runGoalId)) return;
+		if (this.denied) {
+			this.denied = false;
+			this.runGoalId = undefined;
+			// A rejected message creates no scheduling intent. Resume only intent
+			// that the currently focused goal already saved before the rejection.
+			this.schedule(ctx);
+			return;
+		}
+		if (this.runGoalId && this.core.state.goal?.id !== this.runGoalId) { this.schedule(ctx); return; }
 		invalidateGoalSettingsCache();
 		this.safe(ctx, () => {
 			const goal = this.core.state.goal;
@@ -330,7 +352,7 @@ export class GoalScheduler {
 		loadGoalSettings(ctx.cwd);
 	}
 	schedule(ctx: ExtensionContext): void {
-		if (this.inRun || this.core.interruption.isHeld()) return;
+		if (this.inRun || this.denied || this.core.interruption.isHeld()) return;
 		invalidateGoalSettingsCache();
 		this.safe(ctx, () => {
 			this.core.reconcileFocusedGoalFromDisk(ctx);
