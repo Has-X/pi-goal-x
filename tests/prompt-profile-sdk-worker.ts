@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as piAI from "@earendil-works/pi-ai";
-import { alignGoalPromptProfile } from "../extensions/goal-prompt-profile.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { alignGoalPromptProfile, registerGoalPromptProfile } from "../extensions/goal-prompt-profile.ts";
 
 const modern = typeof (piAI as unknown as { getCurrentSystemMessage?: unknown }).getCurrentSystemMessage === "function";
 console.log(`profile-transcript-support=${modern}`);
@@ -65,4 +66,19 @@ test("profile repair respects an explicit head override and additive leading ins
 	const extraCached = [{ ...extra[0]!, content: cached }, extra[1]!];
 	const fixedContent = alignGoalPromptProfile(extraCached, "Current SDK prompt")![0]!.content as unknown[];
 	assert.equal(fixedContent[1], cached[0], "additive leading content keeps its cache marker");
+});
+
+for (const native of [false, true]) test(`profile integration ${native ? "keeps native custom-turn preparation" : "repairs the legacy custom-turn path"}`, { skip: !modern }, () => {
+	const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
+	registerGoalPromptProfile({ on(event: string, handler: (event: unknown, ctx: ExtensionContext) => unknown) { handlers.set(event, handler); } } as unknown as ExtensionAPI, () => true);
+	const ctx = { getSystemPrompt: () => "Current SDK prompt" } as ExtensionContext;
+	if (native) handlers.get("before_agent_start")!({ messageType: "custom", message: { content: "Checkpoint" } }, ctx);
+	const messages = [{ role: "system", content: "", sections: { rules: "Keep native sections" }, toolsAdded: [tool("write")] }, { role: "user", content: "Work" }];
+	const before = structuredClone(messages);
+	const result = handlers.get("context_with_system")!({ messages }, ctx) as { messages: { content: unknown }[] } | undefined;
+	if (native) {
+		assert.equal(result, undefined, "no projection or serialization changes on prepared hosts");
+		assert.equal(handlers.get("context")!({ messages }, ctx), undefined);
+	} else assert.equal(result?.messages[0]!.content, "Current SDK prompt");
+	assert.deepEqual(messages, before);
 });

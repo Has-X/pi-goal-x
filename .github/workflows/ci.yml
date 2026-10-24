@@ -36,6 +36,8 @@ jobs:
         run: npm run lint
       - name: Full test suite
         run: npm run test:all
+      - name: Installed Pi CLI lifecycle
+        run: node scripts/live-session-check.mjs
       - name: Test-manifest self-check
         run: npm run test:selfcheck
       - name: Package dry run
@@ -77,8 +79,10 @@ jobs:
             node: 24
           - sdk: 0.87.0
             node: 24
-          - sdk: 1.4.0
+          - sdk: 1.0.0
             node: 24
+          - sdk: 1.4.0
+            node: 22.19.0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

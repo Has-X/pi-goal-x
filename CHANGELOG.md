@@ -4,6 +4,11 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Develop and test against Pi 1.4.0. Use its native custom-turn prompt preparation while retaining the fallback for older hosts, honor startup cancellation, and run CLI checks against the repository's SDK.
+- Accept `max` thinking for the completion auditor and blocker Oracle in settings and the selector.
+
 ### Fixed
 
 - Skip audit-message settlement callbacks whose Pi context was invalidated by session replacement or reload, preserving replacement-session messages and scheduling intent (#90).

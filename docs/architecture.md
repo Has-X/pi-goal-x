@@ -258,13 +258,14 @@ skips those snapshots. Settings are rechecked at scheduling and admission; optin
 out removes saved delay metadata without renewing consumption. Resume and genuine
 host input reset pacing; strict waits and provider recovery remain independent.
 
-On structured-transcript Pi hosts, `goal-prompt-profile.ts` projects the current
-public host prompt and resolved tool declarations into goal execution requests.
-This repairs custom-triggered first requests after direct creation, drafting,
-resume and reload, before the first tool response. It uses `context_with_system`
-where available and the full ordinary `context` event on earlier structured
-hosts. Classic hosts keep their native path. Projection is request-local: host
-history, tool/result pairs and additional extension instructions are retained.
+`goal-prompt-profile.ts` detects Pi's native custom-turn startup protocol and
+leaves its structured prompt/tool deltas intact on Pi 1.2 and newer. On older
+affected structured hosts, it projects the current public prompt and resolved
+tools through `context_with_system`, or the full `context` event where necessary.
+That fallback fixes the first request after direct creation, drafting, resume or
+reload without changing history or tool/result pairs. Classic hosts keep their
+native path. Current `agent_settled.aborted` events stop continuation/recovery and
+pause the associated goal, including cancellation before a provider request.
 
 Audit display messages flush only at idle settlement and remain scoped to their
 session. If Pi has invalidated a settlement context, the handler skips it before

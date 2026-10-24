@@ -8,6 +8,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {createAgentSession,DefaultResourceLoader,ModelRuntime,SessionManager,SettingsManager} from '@earendil-works/pi-coding-agent';
 import {EvaluationBudget} from '../live/budget.mjs';
 import {output,roots,repository} from './prepare.mjs';
+import {piVersion} from '../../scripts/pi-host.mjs';
 
 const policy=process.argv[2]??'candidate';
 const production=process.env.PI_GOAL_EVAL_PRODUCTION==='1';
@@ -23,7 +24,7 @@ const model=runtime.getModel(provider,modelId);
 if(!model||!runtime.hasConfiguredAuth(provider))throw new Error('Configured evaluation model unavailable; no model request sent');
 const budget=new EvaluationBudget({limit:2,maxTokens:4096});
 budget.caseLimit=40;budget.install(runtime);
-const result={evidence:'real model, actual SDK, ordinary /goal confirmation choices; agent-operated RPC walkthrough',production,policy,provider,model:modelId,fixtureCwd:cwd,ordinaryWording,thinking:'medium',dialogs:[],commands:[],tools:[],executions:[],errors:[],requests:budget.requests};
+const result={evidence:'real model, actual SDK, ordinary /goal confirmation choices; agent-operated RPC walkthrough',sdk:piVersion,production,policy,provider,model:modelId,fixtureCwd:cwd,ordinaryWording,thinking:'medium',dialogs:[],commands:[],tools:[],executions:[],errors:[],requests:budget.requests};
 const started=Date.now();
 let core,session;
 const save=()=>fs.writeFileSync(path.join(output,`live-${caseId}.json`),JSON.stringify({...result,elapsedMs:Date.now()-started,chargedOrReservedUSD:budget.spent,reservedUSD:budget.reserved},null,2)+'\n');

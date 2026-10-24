@@ -1,12 +1,18 @@
 # Production implementation and validation — 2026-10-24
 
+The initial results below used Pi 1.0.0. The subsequent
+[Pi 1.4 compatibility update](../2026-10-24-pi-1-4-compatibility/VALIDATION.md)
+updates the development pins, native startup integration, thinking settings,
+CLI tools and current release checks. Earlier evidence retains its original SDK.
+
 Branch: `codex/continuation-defaults-and-prompt-profile`, based on `origin/main`
 at `64c5ace`, retaining the preceding assessment and evaluation commits.
 
 The ordinary workflow continues immediately after confirmation. Idle pacing is
 an explicit global/project option, off by default. The first executor request
 now receives the current Pi prompt and tools. The independent stale-context fix
-for #90 is retained. The README and dependency pins are unchanged.
+for #90 is retained. The initial implementation left the README and dependency
+pins unchanged; the follow-up above updates the SDK pins.
 
 ## Implemented behavior
 

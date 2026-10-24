@@ -365,7 +365,7 @@ export function registerGoalEvents(core: GoalCore): void {
 	pi.on("before_agent_start", async (event, ctx) => {
 		core.advanceTurnSeq();
   if (!hasActiveDraft(core)) core.installGoalToolProfile(!loadGoalSettings(ctx.cwd).disableTasks);
-		// Pi 1.4 distinguishes custom triggers from user prompts. Older hosts
+		// Pi 1.2+ distinguishes custom triggers from user prompts. Older hosts
 		// expose only prompt, so read the shared public trigger shapes here.
 		const trigger = event as unknown as { prompt?: string; message?: { customType?: string; details?: unknown; content?: unknown } };
 		const incomingGoalId = trigger.message ? goalEventMessageId(trigger.message) : extractGoalIdFromInjectedMessage(trigger.prompt ?? "");
@@ -562,12 +562,21 @@ export function registerGoalEvents(core: GoalCore): void {
 		continuationAfterSettleFor = core.state.goal.id;
 	});
 
-	pi.on("agent_settled", async (_event, ctx) => {
+	pi.on("agent_settled", async (event, ctx) => {
 		if (!core.auditMessages.flush(ctx, pi)) return;
 		const goalId = continuationAfterSettleFor;
 		continuationAfterSettleFor = null;
 		const networkErrorGoalId = networkErrorRecoveryAfterSettleFor;
 		networkErrorRecoveryAfterSettleFor = null;
+		// Current Pi reports startup cancellation even when no assistant message
+		// or live request signal remains. Older hosts omit this field.
+		if ((event as unknown as { aborted?: boolean }).aborted === true) {
+			const abortedGoalId = goalId ?? networkErrorGoalId ?? core.runningGoalId;
+			core.runningGoalId = null;
+			if (abortedGoalId && core.state.goal?.id === abortedGoalId && core.state.goal.status === "active") core.pauseActiveGoal(ctx);
+			core.scheduler.settled(ctx, false);
+			return;
+		}
 		core.scheduler.settled(ctx, !!goalId && core.isActionableContinuationGoal(goalId));
 		if (goalId && core.isActionableContinuationGoal(goalId)) return;
 		if (!networkErrorGoalId || !core.isActionableContinuationGoal(networkErrorGoalId)) return;

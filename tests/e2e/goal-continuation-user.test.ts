@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-for (const mode of ["draft", "direct", "pause", "reload"]) test(`standard user: ${mode} starts with the correct profile and reaches audited completion`, { timeout: 30000 }, async () => {
+for (const mode of ["draft", "direct", "pause", "reload", "abort"]) test(`standard user: ${mode} starts with the correct profile and reaches audited completion`, { timeout: 30000 }, async () => {
 	const { stdout } = await promisify(execFile)(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("../continuation-user-sdk-worker.mjs", import.meta.url)), mode], { timeout: 25000 });
 	const result = JSON.parse(stdout.trim().split("\n").at(-1)!);
 	assert.equal(result.passed, true);
@@ -13,4 +13,5 @@ for (const mode of ["draft", "direct", "pause", "reload"]) test(`standard user: 
 	assert.equal(result.artifact, "verified result\n");
 	if (mode === "pause" || mode === "reload") assert.equal(result.paused, true);
 	if (mode === "reload") assert.equal(result.reloadedWhilePaused, true);
+	if (mode === "abort" && result.nativePromptPreparation) assert.equal(result.pausedBeforeAnyRequest, true);
 });

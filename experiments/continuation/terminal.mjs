@@ -5,6 +5,7 @@ import http from 'node:http';
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {output,roots,repository} from './prepare.mjs';
+import {piCLI,piVersion} from '../../scripts/pi-host.mjs';
 
 const cwd=path.join(output,process.env.PI_GOAL_TERMINAL_NAME??'terminal');
 const globalFile=process.env.PI_GOAL_TERMINAL_GLOBAL_FILE??path.join(cwd,'global.json');
@@ -46,7 +47,8 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 fs.writeFileSync(path.join(agentDir,'settings.json'),JSON.stringify({defaultProvider:'fixture',defaultModel:'fixture',compaction:{enabled:false},retry:{enabled:false}}));
 fs.writeFileSync(path.join(agentDir,'models.json'),JSON.stringify({providers:{fixture:{baseUrl:`http://127.0.0.1:${server.address().port}/v1`,api:'openai-completions',apiKey:'fixture',models:[{id:'fixture',name:'Fixture',contextWindow:200000,maxTokens:512}]}}}));
 fs.writeFileSync(path.join(cwd,'actions.jsonl'),'');
-const config={cwd,raw:path.join(cwd,'terminal.bin'),actions:path.join(cwd,'actions.jsonl'),env:{PI_CODING_AGENT_DIR:agentDir,PI_GOAL_GLOBAL_SETTINGS_FILE:globalFile,PI_OFFLINE:'1',TERM:'xterm-256color'},argv:['pi','--offline','-ne','-ns','-np','-nc','--no-themes','--approve','-e',path.join(production?repository:roots.candidate,'extensions/goal.ts'),'--session-dir',path.join(cwd,'sessions')]};
+const config={cwd,raw:path.join(cwd,'terminal.bin'),actions:path.join(cwd,'actions.jsonl'),env:{PI_CODING_AGENT_DIR:agentDir,PI_GOAL_GLOBAL_SETTINGS_FILE:globalFile,PI_OFFLINE:'1',TERM:'xterm-256color'},argv:[process.execPath,piCLI,'--offline','-ne','-ns','-np','-nc','--no-themes','--approve','-e',path.join(production?repository:roots.candidate,'extensions/goal.ts'),'--session-dir',path.join(cwd,'sessions')]};
+fs.writeFileSync(path.join(cwd,'host.json'),JSON.stringify({sdk:piVersion,cli:piCLI})+'\n');
 fs.writeFileSync(path.join(cwd,'config.json'),JSON.stringify(config));
 console.log(JSON.stringify({cwd,actions:config.actions,raw:config.raw,objective}));
 const child=spawn('python3',[new URL('./terminal.py',import.meta.url).pathname,path.join(cwd,'config.json')],{stdio:'inherit'});

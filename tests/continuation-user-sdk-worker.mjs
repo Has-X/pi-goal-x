@@ -11,12 +11,14 @@ import {Type} from '@earendil-works/pi-ai';
 import goalExtension from '../extensions/goal.ts';
 
 const mode=process.argv[2]??'draft';
-const lifecycle=mode==='pause'||mode==='reload';
+const startupAbort=mode==='abort';
+const lifecycle=mode==='pause'||mode==='reload'||startupAbort;
 const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'goal-user-sdk-'));
 const originalGlobal=process.env.PI_GOAL_GLOBAL_SETTINGS_FILE;
 process.env.PI_GOAL_GLOBAL_SETTINGS_FILE=path.join(cwd,'global.json');
 const requests=[],choices=[],errors=[];
-let session,core,piApi,step=0,auditStep=0,held=false,releaseHold,paused=false;
+let session,core,piApi,step=0,auditStep=0,held=false,releaseHold,paused=false,nativePromptPreparation=false,pausedBeforeAnyRequest;
+const externalGuard='EXTERNAL_GOAL_GUARD: preserve this instruction across custom tool turns.';
 const tool=(name,args)=>({tool:name,args});
 const plan=[{text:'Compare the two assumptions before selecting an approach.'},{text:'The second approach satisfies both constraints; record and check it next.'},tool('publish_report',{stage:1}),{text:'The report section is saved.'},tool('write',{path:'result.txt',content:'verified result\n'}),tool('read',{path:'result.txt'}),tool('update_goal',{status:'complete'})];
 const server=http.createServer(async(req,res)=>{
@@ -47,6 +49,12 @@ try{
  runtime.registerProvider('fixture',{baseUrl:`http://127.0.0.1:${server.address().port}/v1`,api:'openai-completions',apiKey:'fixture',models:[{id:'fixture',name:'Fixture',reasoning:false,input:['text'],cost:{input:0,output:0,cacheRead:0,cacheWrite:0},contextWindow:200000,maxTokens:512}]});
  const loader=new DefaultResourceLoader({cwd,agentDir:path.join(cwd,'agent'),noExtensions:true,noSkills:true,noThemes:true,noPromptTemplates:true,noContextFiles:true,extensionFactories:[pi=>{
   piApi=pi;goalExtension(pi);core=pi._goalCore;
+  pi.on('before_agent_start',async event=>{
+   if(!event.messageType)return;
+   nativePromptPreparation=true;
+   event.systemPromptOptions.sections.external_goal_guard=externalGuard;
+   if(startupAbort&&event.messageType==='custom'&&!held){held=true;await new Promise(resolve=>{releaseHold=resolve;});}
+  });
   pi.registerTool(defineTool({name:'publish_report',label:'Publish',description:'Save a completed report section.',parameters:Type.Object({stage:Type.Number()}),async execute(_id,args){fs.writeFileSync(path.join(cwd,'report.txt'),`section ${args.stage}\n`);return{content:[{type:'text',text:'Saved; invoice status pending is unrelated.'}],details:{id:'invoice',status:'pending'}};}}));
  }]});
  await loader.reload();
@@ -55,24 +63,31 @@ try{
   async select(title,options){const answer=options.find(o=>/confirm.*create/i.test(o))??options.find(o=>/^Enabled\b/.test(o))??options[0];choices.push({title:title.split('\n')[0],answer});return answer;},
   async confirm(){return true;},async input(){return 'Use the stated objective.';}},onError:event=>errors.push(event.error)});
  await bind();
- const command=`/${mode==='direct'||mode==='reload'?'goal-direct':'goal'} Create result.txt containing exactly verified result followed by a newline, verify it and finish.`;
+ const command=`/${mode==='direct'||mode==='reload'||startupAbort?'goal-direct':'goal'} Create result.txt containing exactly verified result followed by a newline, verify it and finish.`;
  const start=session.prompt(command);
  if(lifecycle){
-  await until(()=>held);await session.prompt('/goal-pause');await session.abort();paused=core.state.goal?.status==='paused';assert.equal(paused,true);
+  await until(()=>held);
+  // Older hosts have no cancellable custom-start hook; use their ordinary pause
+  // control. Current hosts must honor abort before making any provider request.
+  if(!startupAbort||!nativePromptPreparation)await session.prompt('/goal-pause');
+  const aborting=session.abort();if(startupAbort)releaseHold();await aborting;
+  paused=core.state.goal?.status==='paused';assert.equal(paused,true);
+  if(startupAbort&&nativePromptPreparation){pausedBeforeAnyRequest=requests.length===0;assert.equal(pausedBeforeAnyRequest,true);}
   const count=requests.length;await delay(150);assert.equal(requests.length,count);assert.equal(fs.existsSync(path.join(cwd,'result.txt')),false);
   releaseHold();await start;
   if(mode==='reload'){await session.reload();await bind();core=piApi._goalCore;assert.equal(core.state.goal?.status,'paused');}
   await session.prompt('/goal-resume');
  }else await start;
- await until(()=>!core.state.goal&&session.isIdle);
+ await until(()=>fs.existsSync(path.join(cwd,'result.txt'))&&!core.state.goal&&session.isIdle);
  assert.equal(fs.readFileSync(path.join(cwd,'result.txt'),'utf8'),'verified result\n');
  if(!lifecycle)assert.equal(fs.readFileSync(path.join(cwd,'report.txt'),'utf8'),'section 1\n');
  assert.deepEqual(errors,[]);
  const execution=requests.filter(r=>r.phase==='execution');
  for(const request of execution){assert.ok(request.system.includes('expert coding assistant'));assert.ok(request.system.includes('create_goal'));assert.ok(!request.system.includes('propose_goal_draft'));assert.ok(request.tools.includes('update_goal'));}
+ if(nativePromptPreparation)for(const request of execution)assert.ok(request.system.includes(externalGuard),'native prompt preparation preserves another extension instruction');
  assert.equal(new Set(execution.map(r=>r.hash)).size,1,'initial and subsequent executor system prefixes match');
  assert.equal(requests.filter(r=>r.phase==='audit'&&r.action==='read').length,1,'actual auditor reads the artifact');
- const result={passed:true,mode,command,choices,requests:requests.map(({system:_system,...r})=>r),initialExecutionPromptCorrect:true,executorPrefixStable:true,artifact:'verified result\n',report:!lifecycle?'section 1\n':undefined,paused,reloadedWhilePaused:mode==='reload',errors};
+ const result={passed:true,mode,command,choices,requests:requests.map(({system:_system,...r})=>r),initialExecutionPromptCorrect:true,executorPrefixStable:true,nativePromptPreparation,externalPromptInstructionPreserved:nativePromptPreparation?true:undefined,artifact:'verified result\n',report:!lifecycle?'section 1\n':undefined,paused,pausedBeforeAnyRequest,reloadedWhilePaused:mode==='reload',errors};
  if(process.env.PI_GOAL_USER_EVIDENCE)fs.writeFileSync(process.env.PI_GOAL_USER_EVIDENCE,JSON.stringify(result,null,2)+'\n');
  console.log(JSON.stringify(result));
 }finally{

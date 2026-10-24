@@ -8,5 +8,5 @@ test("real SDK: prompt/profile repair preserves instructions, schemas, metadata 
 	const { NODE_TEST_CONTEXT: _dropped, ...env } = process.env;
 	const { stdout } = await promisify(execFile)(process.execPath, ["--experimental-strip-types", "--test", fileURLToPath(new URL("./prompt-profile-sdk-worker.ts", import.meta.url))], { env, timeout: 10000 });
 	assert.match(stdout, /(?:#|ℹ) fail 0/);
-	assert.match(stdout, stdout.includes("profile-transcript-support=true") ? /(?:#|ℹ) pass 4/ : /(?:#|ℹ) skipped 4/);
+	assert.match(stdout, stdout.includes("profile-transcript-support=true") ? /(?:#|ℹ) pass 6/ : /(?:#|ℹ) skipped 6/);
 });

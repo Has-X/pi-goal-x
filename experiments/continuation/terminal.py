@@ -15,7 +15,7 @@ pid, fd = pty.fork()
 if pid == 0:
     os.chdir(config["cwd"])
     os.environ.update(config["env"])
-    os.execvp("pi", config["argv"])
+    os.execvp(config["argv"][0], config["argv"])
 
 
 def resize(rows, cols):

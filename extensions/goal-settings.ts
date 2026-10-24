@@ -29,7 +29,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { KeyId } from "@earendil-works/pi-tui";
 
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export const GOAL_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ThinkingLevel = typeof GOAL_THINKING_LEVELS[number];
 
 // ── sparse keybinding layers ────────────────────────────────────────────────
 
@@ -199,7 +200,7 @@ export type GoalSettings = ResolvedGoalSettings;
 export const PI_GOAL_SETTINGS_FILE_ENV = "PI_GOAL_SETTINGS_FILE";
 export const PI_GOAL_GLOBAL_SETTINGS_FILE_ENV = "PI_GOAL_GLOBAL_SETTINGS_FILE";
 
-const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
+const THINKING_LEVELS = new Set<string>(GOAL_THINKING_LEVELS);
 
 // ── pure path resolution ────────────────────────────────────────────────────
 

@@ -52,13 +52,21 @@ export function registerGoalPromptProfile(
 	// Classic hosts have no transcript helpers. Structured hosts before the
 	// full-context event expose system messages through the ordinary hook.
 	if (!transcript.getCurrentSystemMessage) return;
+	let hostPreparesCustomTurns = false;
+	pi.on("before_agent_start", event => {
+		// Pi 1.2 introduced this public protocol together with native custom-
+		// turn preparation. Keep its structured prompt/tool deltas untouched.
+		const kind = (event as unknown as { messageType?: string }).messageType;
+		if (kind === "user" || kind === "custom") hostPreparesCustomTurns = true;
+	});
 	type FullContextOn = (event: "context_with_system", handler: (event: { messages: Message[] }, ctx: ExtensionContext) => unknown) => unknown;
 	(pi.on as unknown as FullContextOn)("context_with_system", (event, ctx) => {
-		if (!isGoalContinuation(ctx)) return;
+		if (hostPreparesCustomTurns || !isGoalContinuation(ctx)) return;
 		const messages = alignGoalPromptProfile(event.messages, ctx.getSystemPrompt());
 		return messages ? { messages } : undefined;
 	});
 	pi.on("context", (event, ctx) => {
+		if (hostPreparesCustomTurns) return;
 		// Modern hosts strip system messages from this event and restore them
 		// before context_with_system; let that public boundary own the repair.
 		const full = event.messages as unknown as Message[];

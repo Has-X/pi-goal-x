@@ -199,3 +199,10 @@
 - Rechecked open issues: #90 and #100. #90 is fixed; #100 gains optional pacing
   and stays open because immediate unlimited defaults can still loop. No issue
   state, upstream report or producer integration was changed.
+
+## Current SDK follow-up
+
+- User asked for the branch/PR to reflect the latest Pi release. The follow-up
+  `../2026-10-24-pi-1-4-compatibility/` pins Pi 1.4, uses native custom startup,
+  handles its settlement abort flag, adds `max` thinking and updates CLI probes.
+  The original 1.0 evidence above is preserved rather than relabeled.
