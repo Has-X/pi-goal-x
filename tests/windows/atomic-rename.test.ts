@@ -2,12 +2,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
+import fsDefault from "node:fs";
+import {syncBuiltinESMExports} from "node:module";
 import os from "node:os";
 import path from "node:path";
 import {spawn} from "node:child_process";
 import {once} from "node:events";
 import {atomicRenamer} from "../../extensions/storage/atomic-rename.ts";
-import {atomicWriteGoalFile} from "../../extensions/storage/goal-files.ts";
+import {atomicWriteGoalFile, invalidateGoalPoolCache, readActiveGoalPool, writeActiveGoalFile} from "../../extensions/storage/goal-files.ts";
+import {createGoal} from "../../extensions/goal-record.ts";
 
 const script = `
 $ErrorActionPreference = 'Stop'
@@ -95,4 +98,31 @@ test("native Windows permanent sharing failure preserves the target and cleans t
 	assert.equal(fs.readFileSync(target,"utf8"),"original");
 	assert.deepEqual(fs.readdirSync(path.dirname(target)),["goal.md"]);
 	await holder.close();
+});
+
+test("native Windows pool snapshot delta recovers after a sharing lock clears", {timeout: 20000}, async t => {
+	assert.equal(process.platform,"win32");
+	const cwd=fs.mkdtempSync(path.join(os.tmpdir(),"goal snapshot lock "));
+	let holder: Awaited<ReturnType<typeof lock>> | undefined;
+	t.after(async()=>{t.mock.restoreAll(); syncBuiltinESMExports(); await holder?.close(); fs.rmSync(cwd,{recursive:true,force:true});});
+	const first=writeActiveGoalFile({cwd},createGoal({objective:"First goal",autoContinue:false,sisyphus:false}));
+	invalidateGoalPoolCache(); readActiveGoalPool({cwd});
+	const target=path.join(cwd,".pi/.goals-pool-snapshot.json"), release=path.join(cwd,"release");
+	holder=await lock(target,release);
+	const rename=fsDefault.renameSync;
+	let failures=0;
+	// Observe real OS failures and release the external holder after the first.
+	// Every call still reaches the native rename; no failure is fabricated.
+	t.mock.method(fsDefault,"renameSync",(source: fs.PathLike,destination: fs.PathLike)=>{
+		try {rename(source,destination);} catch(error) {
+			if(String(destination)===target) {failures++; fs.writeFileSync(release,"release");}
+			throw error;
+		}
+	});
+	syncBuiltinESMExports();
+	const second=writeActiveGoalFile({cwd},createGoal({objective:"Second goal",autoContinue:false,sisyphus:false}));
+	assert.ok(failures>=1,"the snapshot replacement encountered actual Windows contention");
+	const snapshot=JSON.parse(fs.readFileSync(target,"utf8"));
+	assert.deepEqual(snapshot.goals.map((goal:{id:string})=>goal.id).sort(),[first.id,second.id].sort());
+	assert.equal(fs.readdirSync(path.dirname(target)).some(name=>name.endsWith(".tmp")),false);
 });

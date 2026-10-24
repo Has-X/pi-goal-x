@@ -193,7 +193,8 @@ function updatePoolSnapshotSync(ctx: GoalFileContext, root: string, mutate: (goa
 		const target = goalPoolSnapshotPath(ctx);
 		const tempPath = `${target}.${process.pid}.${Date.now()}.tmp`;
 		fs.writeFileSync(tempPath, JSON.stringify(snapshot), "utf8");
-		fs.renameSync(tempPath, target);
+		try { renameAtomicSync(tempPath, target); }
+		catch (error) { try { fs.unlinkSync(tempPath); } catch { /* best effort */ } throw error; }
 		removeLegacyPoolSnapshot(root);
 	} catch {
 		// best-effort
