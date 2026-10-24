@@ -131,7 +131,7 @@ async function showTaskListConfirmationDialog(ctx: ExtensionContext, proposalTex
 
 					// ── Footer ───────────────────────────────────────────────
 					lines.push(accent(`├${horizLine}┤`));
-					lines.push(line(p + dim(`${controls.hint("confirm")} to select  ·  ${controls.hint("up")}${controls.hint("down")} to navigate  ·  ${controls.hint("cancel")} = keep current tasks`)));
+					lines.push(line(p + dim(`${controls.hint("confirm")} to select  ·  ${controls.navigationHint()} to navigate  ·  ${controls.hint("cancel")} = keep current tasks`)));
 					lines.push(accent(`└${horizLine}┘`));
 
 					return lines;

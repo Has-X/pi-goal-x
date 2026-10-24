@@ -101,7 +101,7 @@ export async function showEscapeDialog(
 
 					// ── Footer ───────────────────────────────────────────────
 					lines.push(accent(`├${horizLine}┤`));
-					const footerText = dim(`${controls.hint("confirm")} to select  ·  ${controls.hint("up")}${controls.hint("down")} to navigate  ·  ${controls.hint("cancel")} = continue working`);
+					const footerText = dim(`${controls.hint("confirm")} to select  ·  ${controls.navigationHint()} to navigate  ·  ${controls.hint("cancel")} = continue working`);
 						const truncFooter = truncateToWidth(footerText, innerWidth - 2, "…");
 					lines.push(line(p + truncFooter));
 					lines.push(accent(`└${horizLine}┘`));

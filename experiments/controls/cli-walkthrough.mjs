@@ -8,7 +8,7 @@ import xterm from '@xterm/headless';
 import {piVersion} from '../../scripts/pi-host.mjs';
 
 const repository=fileURLToPath(new URL('../../',import.meta.url));
-const output=path.join(repository,'experiments/runs/goal-controls');
+const output=path.resolve(repository,process.env.PI_GOAL_CONTROLS_OUTPUT??'experiments/runs/goal-controls');
 fs.mkdirSync(output,{recursive:true});
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const until=async(check,label,timeout=15000)=>{
@@ -17,14 +17,13 @@ const until=async(check,label,timeout=15000)=>{
  throw new Error(`Timed out: ${label}`);
 };
 const ESC='\x1b',ENTER='\r',DOWN='\x1b[B',TAB='\t',F6='\x1b[17~';
-const results=[];
-async function boot(label,settings={}){
+async function boot(label,settings={},scenario='normal'){
  const name=`${label}-${process.pid}-${Date.now()}`;
  const cwd=path.join(output,name);
  fs.mkdirSync(path.join(cwd,'.pi'),{recursive:true});
  fs.writeFileSync(path.join(cwd,'.pi/pi-goal-x-settings.json'),JSON.stringify(settings));
  const child=spawn(process.execPath,[path.join(repository,'experiments/continuation/terminal.mjs')],{
-  cwd:repository,env:{...process.env,PI_GOAL_COMPARISON_OUTPUT:output,PI_GOAL_TERMINAL_NAME:name,PI_GOAL_TERMINAL_SOURCE:'production',PI_GOAL_TERMINAL_READY_FILE:path.join(cwd,'ready')},stdio:['ignore','pipe','pipe'],
+  cwd:repository,env:{...process.env,PI_GOAL_COMPARISON_OUTPUT:output,PI_GOAL_TERMINAL_NAME:name,PI_GOAL_TERMINAL_SOURCE:'production',PI_GOAL_TERMINAL_SCENARIO:scenario,PI_GOAL_TERMINAL_READY_FILE:path.join(cwd,'ready')},stdio:['ignore','pipe','pipe'],
  });
  let log='';child.stdout.on('data',data=>{log+=data;});child.stderr.on('data',data=>{log+=data;});
  let rows=32,cols=110;
@@ -108,7 +107,7 @@ async function controlsWalkthrough(){
   await until(()=>fs.existsSync(path.join(h.cwd,'greeting.txt'))&&h.goals().length===0,'custom resume reaches audited completion',20000);
   await h.capture('08-complete');
   assert.equal(fs.readFileSync(path.join(h.cwd,'greeting.txt'),'utf8'),'Hello from goal\n');
-  results.push({case:'controls-ui',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:h.requests().length,checks:['settings-entry','alias','reload','record-key','conflict','scope','inherit','narrow-preview','turn-first','held-time','cancel-edit','custom-resume','audited-completion']});
+  return {case:'controls-ui',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:h.requests().length,checks:['settings-entry','alias','reload','record-key','conflict','scope','inherit','narrow-preview','turn-first','held-time','cancel-edit','custom-resume','audited-completion']};
  }finally{await h.stop();}
 }
 
@@ -127,7 +126,7 @@ async function pauseWalkthrough(order,finish=false){
   if(!finish){await delay(6500);assert.equal(h.requests().length,1);assert.equal(fs.existsSync(path.join(h.cwd,'greeting.txt')),false);}
   assert.equal(h.goals()[0].status,'paused');
   await h.send('/goal-resume\r');await until(()=>fs.existsSync(path.join(h.cwd,'greeting.txt'))&&h.goals().length===0,'resume completes',20000);
-  results.push({case:finish?'goal-first-finish':order,passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:h.requests().length});
+  return {case:finish?'goal-first-finish':order,passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:h.requests().length};
  }finally{await h.stop();}
 }
 
@@ -142,14 +141,128 @@ async function editorWalkthrough(){
   await h.keys(ESC,ESC,ESC);await h.expect(draft);await h.capture('editor-preserved');
   assert.equal(h.requests().length,0);
   assert.deepEqual(h.config().commands['goal-resume'],['work continue']);
-  results.push({case:'editor-controls',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:0,checks:['command-shortcut','settings-recovery','pending-reload','unsent-editor-text']});
+  return {case:'editor-controls',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:0,checks:['command-shortcut','settings-recovery','pending-reload','unsent-editor-text']};
  }finally{await h.stop();}
 }
 
-try{
- await controlsWalkthrough();console.log(JSON.stringify(results.at(-1)));
- await editorWalkthrough();console.log(JSON.stringify(results.at(-1)));
- for(const order of ['together','goal-first']){await pauseWalkthrough(order);console.log(JSON.stringify(results.at(-1)));}
- await pauseWalkthrough('goal-first',true);console.log(JSON.stringify(results.at(-1)));
- fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({sdk:piVersion,results},null,2)+'\n');
-}catch(error){fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({sdk:piVersion,results,failed:String(error.stack??error)},null,2)+'\n');throw error;}
+async function settingsPathsWalkthrough(){
+ const h=await boot('settings-paths');
+ try{
+  await h.send('/goal-settings controls\r');await h.resize(20,72);await h.expect('Source: Default');
+  await h.keys('Pause the goal',ENTER,ENTER,'\x15','/reload',ENTER);await h.expect('belongs to Pi');
+  await h.capture('invalid-command');
+  await h.keys('\x15','/work stop',ENTER);assert.deepEqual(h.config().commands['goal-pause'],['work stop']);
+  await h.keys(ENTER,DOWN,ENTER,'/hold',ENTER);assert.deepEqual(h.config().commands['goal-pause'],['work stop','hold']);
+  await h.keys(ENTER,DOWN,DOWN,ENTER);assert.deepEqual(h.config().commands['goal-pause'],[]);
+  await h.keys(ENTER,DOWN,DOWN,DOWN,ENTER);assert.deepEqual(h.config().commands['goal-pause'],['goal-pause']);
+  await h.keys(ESC,'\x1b[F',ENTER,DOWN,ENTER);assert.ok(h.config().commands,'Back preserves overrides');
+  await h.keys(ENTER,ESC);assert.ok(h.config().commands,'Escape preserves overrides');
+  await h.keys(ENTER,ENTER);assert.equal(h.config().commands,undefined);
+  await h.keys('Goal settings',ENTER,DOWN,DOWN,ENTER);assert.deepEqual(h.config().commands['goal-settings'],[]);
+  await h.expect('recovery only');await h.capture('settings-recovery');
+  await h.send('\x12');await h.expect('Reloaded keybindings');
+  await h.send('/goal-settings controls\r');await h.expect('Goal controls');
+  await h.keys('\x1b[F',ENTER,ENTER);assert.equal(h.config().commands,undefined);
+  await h.keys(TAB,'Pause /',ENTER,ENTER,ESC);assert.equal(h.config().keybindings,undefined);
+  await h.keys(DOWN,ENTER,F6,ESC);assert.equal(h.config().keybindings,undefined,'record preview cancels');
+  await h.keys(ENTER,F6,ENTER);assert.deepEqual(h.config().keybindings.pause,['escape','f6']);
+  await h.keys(ENTER,DOWN,DOWN,ENTER,'\x15','potato',ENTER);await h.expect('Use Pi key names');
+  await h.keys('\x15','["ctrl+,", "f6"]',ENTER);assert.deepEqual(h.config().keybindings.pause,['ctrl+,','f6']);
+  await h.keys(ENTER,DOWN,DOWN,ENTER,ENTER);assert.deepEqual(h.config().keybindings.pause,['ctrl+,','f6']);
+  await h.keys(ENTER,DOWN,DOWN,DOWN,ENTER);assert.deepEqual(h.config().keybindings.pause,[]);
+  await h.keys(ENTER,DOWN,DOWN,DOWN,DOWN,ENTER);assert.equal(h.config().keybindings.pause,'escape');
+  await h.keys('\x13',ENTER,ENTER,'\x1b[18~',ENTER);await h.expect('overrides still apply');
+  await h.keys('\x13',ENTER,DOWN,DOWN,DOWN,DOWN,DOWN,ENTER);assert.equal(h.config().keybindings,undefined);
+  await h.expect('Source: All projects');await h.capture('inherited-narrow');
+  await h.keys('\x13',ESC,'\x1b[F',ENTER,ENTER);assert.equal(JSON.parse(fs.readFileSync(path.join(h.cwd,'global.json'),'utf8')).keybindings,undefined);
+  await h.keys('\x13',TAB,ENTER,DOWN,ENTER);assert.equal(h.config().pauseOrder,'goal-first');
+  await h.keys(ENTER);await h.capture('saved-pause-selected');assert.match(await h.screen(),/› Goal first/);
+  await h.keys(ENTER);assert.equal(h.config().pauseOrder,'goal-first');
+  await h.keys(ENTER,DOWN,ENTER);assert.equal(h.config().pauseOrder,'turn-first');
+  await h.keys(ENTER,DOWN,ENTER);assert.equal(h.config().pauseOrder,undefined,'inherit returns to the default');
+  await h.capture('pause-inherited');
+  assert.equal(h.requests().length,0,'configuration never asks the model');
+  return {case:'settings-paths',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:0,checks:['invalid-command','correct-input','replace','alias','disable','default','reset-back','reset-cancel','reset-commands','settings-recovery','capture-cancel','preview-cancel','additional-key','invalid-key','comma-roundtrip','disable-key','default-key','scope','inherit-key','reset-global','saved-pause-selection','inherit-pause','narrow-provenance']};
+ }finally{await h.stop();}
+}
+
+async function commandShortcutWalkthrough(){
+ const h=await boot('command-shortcuts',{keybindings:{commands:{'goal-direct':'f8','goal-pause':'f9'}}});
+ try{
+  await h.send('\x1b[19~');await h.expect('Goal objective');await h.send(ESC);
+  assert.equal(h.requests().length,0);assert.equal(h.goals().length,0);
+  await h.send('\x1b[19~');await h.expect('Goal objective');
+  await h.send('Create greeting.txt containing exactly Hello from goal followed by a newline. Verify it.\r');
+  await until(()=>h.requests().length===1,'shortcut starts a real goal');
+  await h.send('\x1b[20~');await until(()=>h.goals()[0]?.status==='paused','Pause command shortcut stops both');
+  await h.expect('Operation aborted');await h.capture('command-paused');
+  assert.equal(fs.existsSync(path.join(h.cwd,'greeting.txt')),false);
+  await h.send('/goal-resume\r');await until(()=>fs.existsSync(path.join(h.cwd,'greeting.txt'))&&h.goals().length===0,'shortcut goal completes after resume',20000);
+  return {case:'command-shortcuts',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:h.requests().length,checks:['argument-dialog-cancel','argument-dialog-submit','pause-command-shortcut','resume','audited-completion']};
+ }finally{await h.stop();}
+}
+
+async function nativeInterruptWalkthrough(){
+ const h=await boot('native-interrupt',{keybindings:{pause:'f6'}});
+ try{
+  await h.send('/goal-direct Create greeting.txt containing exactly Hello from goal followed by a newline. Verify it.\r');
+  await until(()=>h.requests().length===1,'visible work before native interrupt');await h.send(ESC);
+  await until(()=>h.goals()[0]?.scheduler?.phase==='interrupted','native interrupt holds the turn');
+  assert.equal(h.goals()[0].status,'active');await h.expect('waiting for you');await h.capture('native-held');
+  await delay(6500);assert.equal(h.requests().length,1);assert.equal(fs.existsSync(path.join(h.cwd,'greeting.txt')),false);
+  await h.send('Continue with the goal now.\r');
+  await until(()=>fs.existsSync(path.join(h.cwd,'greeting.txt'))&&h.goals().length===0,'a user message releases the hold',20000);
+  return {case:'native-interrupt',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:h.requests().length,checks:['native-interrupt','goal-stays-active','no-background-restart','user-message-continues','audited-completion']};
+ }finally{await h.stop();}
+}
+
+async function dialogKeysWalkthrough(){
+ const h=await boot('dialog-keys',{keybindings:{dialog:{confirm:'f6',cancel:'f7',up:'k',down:'j',toggleAuditor:'x'}}});
+ try{
+  await h.send('/goal Create the greeting file and verify it.\r');await h.expect('Confirm Goal Draft');await h.expect('F6');await h.expect('F7');
+  await h.send(ENTER);assert.equal(h.goals().length,0,'the old confirmation key is inactive');
+  await h.send('j');await h.capture('custom-navigation');
+  await h.send('k');await h.send('x');await h.expect('Auditor disabled');
+  await h.send('x');await h.expect('Auditor enabled');
+  // Cancel returns to the conversation with the draft preserved for refinement.
+  await h.send('\x1b[18~');await h.expect('Tell me what you would like to change.');assert.equal(h.goals().length,0);
+  await h.send('/goal-cancel\r');await h.expect('Draft cancelled');
+  await h.send('/goal Create the greeting file and verify it.\r');await h.expect('Confirm Goal Draft');
+  await h.send(F6);await until(()=>fs.existsSync(path.join(h.cwd,'greeting.txt'))&&h.goals().length===0,'custom confirmation reaches audited completion',20000);
+  return {case:'dialog-keys',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:h.requests().length,checks:['remapped-hints','old-confirm-inactive','custom-navigation','auditor-toggle','custom-cancel','draft-cancel','custom-confirm','audited-completion']};
+ }finally{await h.stop();}
+}
+
+async function answerEditingWalkthrough(){
+ const h=await boot('answer-editing',{keybindings:{dialog:{next:['n','ctrl+a'],previous:'p',cancel:'q',confirm:'f6'}}},'dialog-text');
+ try{
+  await h.send('/goal Create the greeting file and verify it.\r');await h.expect('First answer?');
+  await h.keys('q','n','p','\x01','a','\x05');await h.expect('aqnp');
+  await h.send(ESC);await h.expect('Write your own answer');await h.expect('F6 confirm');
+  await h.keys(F6,ENTER);await h.expect('Second answer?');
+  await h.send('Second answer.\r');await h.expect('Press F6 to submit');await h.expect('aqnp');
+  await h.capture('answers-preserved');await h.send(F6);await h.expect('Confirm Goal Draft');
+  await h.send(F6);await until(()=>fs.existsSync(path.join(h.cwd,'greeting.txt'))&&h.goals().length===0,'typed answers and custom confirmation reach completion',20000);
+  return {case:'answer-editing',passed:true,sdk:piVersion,directory:path.relative(repository,h.cwd),requests:h.requests().length,checks:['letter-controls-preserve-text','native-cursor-keys','native-escape','preserved-draft','custom-editor-hints','custom-summary-confirm','audited-completion']};
+ }finally{await h.stop();}
+}
+
+// Each case owns its Pi process, provider, sessions and both settings layers.
+// Two terminals at a time keeps the walkthrough bounded on two-core CI runners.
+const available=[['controls-ui',controlsWalkthrough],['settings-paths',settingsPathsWalkthrough],['editor-controls',editorWalkthrough],['command-shortcuts',commandShortcutWalkthrough],['together',()=>pauseWalkthrough('together')],['goal-first',()=>pauseWalkthrough('goal-first')],['goal-first-finish',()=>pauseWalkthrough('goal-first',true)],['native-interrupt',nativeInterruptWalkthrough],['dialog-keys',dialogKeysWalkthrough],['answer-editing',answerEditingWalkthrough]];
+const requested=process.argv.slice(2);
+assert.ok(requested.every(name=>available.some(([id])=>id===name)),'Unknown walkthrough case');
+const cases=available.filter(([name])=>!requested.length||requested.includes(name));
+const results=new Array(cases.length);
+const started=Date.now();let next=0;
+await Promise.all(Array.from({length:2},async()=>{
+ while(next<cases.length){
+  const index=next++;
+  try{results[index]=await cases[index][1]();}
+  catch(error){results[index]={case:cases[index][0],passed:false,error:String(error.stack??error)};}
+  console.log(JSON.stringify(results[index]));
+ }
+}));
+const report={sdk:piVersion,elapsedMs:Date.now()-started,results};
+fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(report,null,2)+'\n');
+assert.ok(results.every(result=>result.passed),'All controls walkthroughs must pass; see experiments/runs/goal-controls/results.json');

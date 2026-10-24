@@ -3,6 +3,7 @@
 Open `/goal-settings` and choose **Controls**, or run `/goal-settings controls`.
 The screen has three sections: **Commands**, **Keys** and **Pausing**. Type to
 filter, use the arrow keys and Enter to edit, and Tab to switch sections.
+Page Up/Down moves through long lists; Home/End jumps to the first/last row.
 Ctrl+S switches between **This project** and **All projects**. The selected row shows
 whether its value comes from the project, global settings or the default.
 
@@ -32,6 +33,8 @@ Keys and pause order take effect immediately.
 settings action other spellings, but this entry cannot be removed. Pi command
 roots such as `/reload` and `/settings` are reserved. The editor checks conflicts
 with other commands before saving.
+For settings, **Recovery entry only** removes additional aliases while keeping
+`/goal-settings` available.
 
 The settings keys below are stable action IDs, even after renaming an invocation:
 
@@ -71,10 +74,13 @@ Goal dialog controls apply to questionnaires and confirmation dialogs. They
 have their own context, so the same key can confirm a dialog and pause a live
 goal. Text editing and the settings screen use Pi's usual UI controls. The
 settings screen remains usable when you change goal dialog navigation.
+While typing an answer, letters and Pi's editing keys keep editing text. Escape
+leaves the answer editor; free custom keys such as F7 can do the same.
 
 Pi key names include `escape`, `f6`, `ctrl+alt+p`, `pageUp` and `super+k`. Multiple
 keys can be separated with commas. For a comma key combined with other bindings,
 the text editor also accepts a JSON key list, for example `["ctrl+,", "f6"]`.
+Existing comma-key lists reopen in this form so they can be saved unchanged.
 Terminals must report a key before Pi can use it; some modifier combinations
 require the Kitty keyboard protocol. See [Pi's keybinding reference](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/keybindings.md).
 

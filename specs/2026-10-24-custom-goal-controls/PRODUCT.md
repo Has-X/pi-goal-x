@@ -29,3 +29,11 @@ Add a prominent Controls entry to `/goal-settings`, plus direct `/goal-settings 
 ## Acceptance
 
 Test both unchanged defaults and custom controls through the real Pi CLI: configure a subcommand alias, reload and use it; record and use a custom pause key; exercise each pause order during visible work; change scopes and restore inheritance; reject collisions; cancel an edit without saving; navigate a narrow screen. Verify no accidental goal pause from a settings dialog, no continuation during a turn-only hold, no loss of typed editor text, and no command routing or prompts added to ordinary model context. Keep README layout/scope unchanged; document details in docs and the changelog.
+
+## Review of #106
+
+Review the complete change and exercise every controls operation, including less common disable, default, inherit, reset, error-correction and cancellation paths. Reopening pause order selects the saved choice. Settings recovery remains visibly available when its other invocations are disabled. Existing key lists must reopen and save unchanged, including punctuation. Keep the selected value, its source and navigation discoverable on narrow screens; long lists support paging and jumping to either end. Saving from a shortcut explains the available reload path accurately.
+
+Remapped questionnaire hints must describe the working keys. Letter-based selection controls must not consume answer text; native text-editing keys keep working, including Escape to leave the answer editor. Non-conflicting custom dialog keys remain available while typing.
+
+Reduce Actions jobs and elapsed time without removing supported Pi versions or runtime coverage. Keep an always-completing check on documentation-only changes, cancel superseded runs, avoid redundant installs/tests, and run independent isolated checks concurrently. Performance comparisons run without competing validation work. Publication must retain its tag, registry and ranking safeguards.

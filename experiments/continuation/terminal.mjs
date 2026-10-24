@@ -14,6 +14,7 @@ const production=process.env.PI_GOAL_TERMINAL_SOURCE==='production';
 const agentDir=path.join(cwd,'agent');
 fs.mkdirSync(agentDir,{recursive:true});
 const requests=[];
+let askedQuestions=false;
 const objective=`Create greeting.txt containing exactly Hello from goal followed by a newline. Verify it${production?'': ' and finish with the completion auditor'}.`;
 const server=http.createServer(async(req,res)=>{
  let body='';for await(const chunk of req)body+=chunk;
@@ -25,7 +26,13 @@ const server=http.createServer(async(req,res)=>{
  try{const local=JSON.parse(fs.readFileSync(path.join(cwd,'.pi/pi-goal-x-settings.json'),'utf8'));if(local.idleContinuationBackoff!==undefined)optedIn=local.idleContinuationBackoff===true;}catch{ /* Missing project layer inherits global. */ }
  let action;
  if(auditor){const ok=fs.existsSync(path.join(cwd,'greeting.txt'))&&fs.readFileSync(path.join(cwd,'greeting.txt'),'utf8')==='Hello from goal\n';action={text:ok?'The requested file is correct.\n<approved/>':'The file is missing or incorrect.\n<disapproved/>'};}
- else if(names.includes('propose_goal_draft'))action={tool:'propose_goal_draft',args:{objective,sisyphus:false}};
+ else if(names.includes('propose_goal_draft')&&scenario==='dialog-text'&&!askedQuestions){
+  askedQuestions=true;
+  action={tool:'goal_questionnaire',args:{questions:[{id:'first',question:'First answer?',options:[]},{id:'second',question:'Second answer?',options:[]}]}};
+ }
+ else if(names.includes('propose_goal_draft'))action=/Goal draft refinement requested|Draft cancelled/.test(JSON.stringify(payload.messages.at(-1)))
+  ? {text:"Tell me what you would like to change."}
+  : {tool:'propose_goal_draft',args:{objective,sisyphus:false}};
  else if(scenario==='idle-opt-out'&&optedIn)action={text:'Standing by.'};
  else if(!fs.existsSync(path.join(cwd,'greeting.txt')))action={tool:'write',args:{path:'greeting.txt',content:'Hello from goal\n'}};
  else action={tool:'update_goal',args:{status:'complete'}};

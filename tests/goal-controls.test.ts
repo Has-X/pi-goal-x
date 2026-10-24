@@ -18,6 +18,7 @@ import { createMockTheme, createMockTUI } from "./tui-test-utils.ts";
 import { goalPrompt } from "../extensions/prompts/goal-prompts.ts";
 import { goalDialogControls } from "../extensions/goal-dialog-controls.ts";
 import { showEscapeDialog } from "../extensions/widgets/goal-escape-dialog.ts";
+import { runGoalQuestionnaire, fitDialogLines } from "../extensions/goal-questionnaire.ts";
 import { detailedSummary } from "../extensions/goal-format.ts";
 import { formatRecoveryReport, runRecoveryReport } from "../extensions/goal-recovery.ts";
 
@@ -297,6 +298,7 @@ test("dialog bindings are independent of live shortcuts and expose the configure
 		assert.equal(controls.matches(ENTER, "confirm"), false);
 		assert.equal(controls.matches("j", "down"), true);
 		assert.equal(controls.hint("cancel"), "F7");
+		assert.equal(controls.navigationHint(), "K / J");
 		let result: unknown;
 		let component: { handleInput?(data: string): void; render(width: number): string[] } | undefined;
 		const ctx = { ...h.ctx, ui: { ...h.ctx.ui, custom: async (factory: Function) => {
@@ -439,9 +441,205 @@ test("manual key editing accepts the comma key and native Pi conflicts keep inpu
 	try {
 		const d = dialog(h); d.press(TAB, "Pause /", ENTER, DOWN, DOWN, ENTER, "\x15", '["ctrl+,", "f6"]', ENTER);
 		assert.deepEqual(loadSettingsSnapshot(h.cwd).value.keybindings?.pause, ["ctrl+,", "f6"]);
+		d.press(ENTER, DOWN, DOWN, ENTER);
+		assert.match(d.text(), /JSON key list/);
+		d.press(ENTER);
+		assert.deepEqual(loadSettingsSnapshot(h.cwd).value.keybindings?.pause, ["ctrl+,", "f6"], "an unchanged comma binding can be saved again");
 		d.press(ENTER, ENTER, "\x01", ENTER);
 		assert.match(d.text(), /used by Pi/);
 		assert.deepEqual(loadSettingsSnapshot(h.cwd).value.keybindings?.pause, ["ctrl+,", "f6"]);
+	} finally { h.close(); }
+});
+
+test("reopening pause order keeps the saved choice selected, including inherited choices", () => {
+	for (const order of ["goal-first", "turn-first"] as const) {
+		const h = fixture();
+		try {
+			h.mutate("global", "set", ["pauseOrder"], order);
+			const d = dialog(h); d.press(TAB, TAB, ENTER);
+			assert.match(d.text(), new RegExp(`› ${order === "goal-first" ? "Goal first" : "Turn first"}`));
+			d.press(ENTER);
+			assert.equal(loadSettingsSnapshot(h.cwd).value.pauseOrder, order);
+		} finally { h.close(); }
+	}
+});
+
+test("all command editors support replacement, aliases, disable, default and inheritance", () => {
+	for (const [id, label] of GOAL_COMMANDS) {
+		const h = fixture();
+		try {
+			h.mutate("global", "set", ["commands", id], [`custom ${id}`]);
+			const d = dialog(h); d.press(label, ENTER, ENTER, "\x15", `local ${id}`, ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).value.commands?.[id], [`local ${id}`], id);
+			d.press(ENTER, DOWN, ENTER, `alias ${id}`, ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).value.commands?.[id], [`local ${id}`, `alias ${id}`], id);
+			d.press(ENTER, DOWN, DOWN, ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).value.commands?.[id], [], id);
+			if (id === "goal-settings") assert.match(d.text(), /recovery only/);
+			d.press(ENTER, DOWN, DOWN, DOWN, ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).value.commands?.[id], [id], id);
+			d.press(ENTER, DOWN, DOWN, DOWN, DOWN);
+			assert.match(d.text(), new RegExp(`Inherited: /custom ${id}`));
+			d.press(ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).value.commands?.[id], [`custom ${id}`], id);
+			assert.equal(loadSettingsSnapshot(h.cwd).project.layer.commands?.[id], undefined);
+			d.component.dispose();
+		} finally { h.close(); }
+	}
+});
+
+test("all key editors support recording, adding, manual edits, disable, default and inheritance", () => {
+	for (const action of GOAL_KEY_ACTIONS) {
+		const h = fixture();
+		try {
+			const d = dialog(h); d.press(TAB, action.path[1] === "commands" ? `Command: ${action.label}` : action.label);
+			d.press(ENTER, ENTER, F6, ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).provenance.get(action.path.join("."))?.value, ["f6"], action.label);
+			d.press(ENTER, DOWN, ENTER, "\x1b[18~", ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).provenance.get(action.path.join("."))?.value, ["f6", "f7"], action.label);
+			d.press(ENTER, DOWN, DOWN, ENTER, "\x15", "f8, f9", ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).provenance.get(action.path.join("."))?.value, ["f8", "f9"], action.label);
+			d.press(ENTER, DOWN, DOWN, DOWN, ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).provenance.get(action.path.join("."))?.value, [], action.label);
+			d.press(ENTER, DOWN, DOWN, DOWN, DOWN, ENTER);
+			assert.deepEqual(loadSettingsSnapshot(h.cwd).provenance.get(action.path.join("."))?.value, action.defaults, action.label);
+			d.press(ENTER, DOWN, DOWN, DOWN, DOWN, DOWN, ENTER);
+			assert.equal(loadSettingsSnapshot(h.cwd).provenance.get(action.path.join("."))?.source, "default", action.label);
+			d.component.dispose();
+		} finally { h.close(); }
+	}
+});
+
+test("section reset, Back and cancellation preserve other scopes and sections", () => {
+	const h = fixture();
+	try {
+		h.mutate("global", "set", ["commands", "goal-pause"], ["global pause"]);
+		h.mutate("project", "set", ["commands", "goal-pause"], ["local pause"]);
+		h.mutate("project", "set", ["keybindings", "pause"], "f6");
+		h.mutate("project", "set", ["pauseOrder"], "turn-first");
+		const d = dialog(h); d.press("\x1b[F", ENTER, DOWN, ENTER);
+		assert.deepEqual(loadSettingsSnapshot(h.cwd).project.layer.commands?.["goal-pause"], ["local pause"], "Back does not reset");
+		d.press(ENTER, ESC);
+		assert.deepEqual(loadSettingsSnapshot(h.cwd).project.layer.commands?.["goal-pause"], ["local pause"], "Escape does not reset");
+		d.press(ENTER, ENTER);
+		assert.equal(loadSettingsSnapshot(h.cwd).project.layer.commands, undefined);
+		assert.deepEqual(loadSettingsSnapshot(h.cwd).value.commands?.["goal-pause"], ["global pause"]);
+		assert.equal(loadSettingsSnapshot(h.cwd).value.keybindings?.pause, "f6");
+		d.press(TAB, "\x1b[F", ENTER, ENTER);
+		assert.equal(loadSettingsSnapshot(h.cwd).project.layer.keybindings, undefined);
+		assert.equal(loadSettingsSnapshot(h.cwd).value.pauseOrder, "turn-first");
+		d.press(TAB, "\x1b[F", ENTER, ENTER);
+		assert.equal(loadSettingsSnapshot(h.cwd).project.layer.pauseOrder, undefined);
+		d.component.dispose();
+	} finally { h.close(); }
+});
+
+test("narrow controls keep the source, selected action and navigation visible, with paging", () => {
+	const h = fixture();
+	try {
+		for (const rows of [16, 20, 32]) for (const width of [40, 72, 110]) {
+			const d = dialog(h, rows); d.press(TAB);
+			assert.match(d.text(width), /Source: Default/);
+			assert.match(d.text(width), /Ctrl\+S scope/);
+			d.press("\x1b[6~"); assert.doesNotMatch(d.text(width), /› Pause \/ interrupt/);
+			d.press("\x1b[F"); assert.match(d.text(width), /› Reset keys overrides/);
+			d.press("\x1b[H"); assert.match(d.text(width), /› Pause \/ interrupt/);
+			d.press(ENTER, DOWN, DOWN, DOWN, DOWN, DOWN);
+			assert.match(d.text(width), /› Use inherited value/);
+			d.component.dispose();
+		}
+	} finally { h.close(); }
+});
+
+test("every remapped slash action and command shortcut reaches its stable handler", async () => {
+	for (const [id] of GOAL_COMMANDS) {
+		const h = fixture({ commands: { [id]: [`work ${id}`] }, keybindings: { commands: { [id]: "f6" } } });
+		try {
+			const calls: unknown[] = [];
+			h.core.invokeGoalCommand = async (action, args) => { calls.push([action, args]); };
+			h.ctx.ui.input = async () => "From shortcut";
+			await h.commands.get("work").handler(`${id}  Preserve  spaces`, h.ctx);
+			assert.deepEqual(calls.shift(), [id, "Preserve  spaces"]);
+			syncTerminalInputPause(h.core, h.ctx); h.press(F6);
+			await new Promise(resolve => setTimeout(resolve, 0));
+			assert.deepEqual(calls.shift(), [id, ["goal-direct", "sisyphus-direct", "goal-tweak"].includes(id) ? "From shortcut" : ""]);
+			assert.equal(h.core.goalModalDepth, 0);
+		} finally { h.close(); }
+	}
+});
+
+test("custom dashboard, audit and dialog keys dispatch every advertised action", () => {
+	const navigation: Record<string, string> = { scrollUp: "up", scrollDown: "down", scrollPageUp: "pageUp", scrollPageDown: "pageDown", scrollFirst: "home", scrollLast: "end", up: "up", down: "down", pageUp: "pageUp", pageDown: "pageDown", first: "home", last: "end" };
+	for (const action of GOAL_KEY_ACTIONS.filter(action => action.path[1] !== "commands" && action.path[1] !== "pause")) {
+		const h = fixture();
+		try {
+			h.mutate("project", "set", action.path, "f6");
+			if (action.context === "dialog") {
+				const controls = goalDialogControls(h.cwd);
+				assert.equal(controls.matches(F6, action.path[2] as never), true, action.label);
+				continue;
+			}
+			let called: string | undefined;
+			h.core.isDashboardExpanded = () => action.context === "expanded";
+			h.core.toggleDashboardExpanded = () => { called = "toggleExpand"; };
+			h.core.toggleGoalAuditor = () => { called = "toggleAuditor"; };
+			h.core.abortAudit = () => { called = "interruptAudit"; };
+			if (action.context === "audit") h.core.auditProgress = {} as never;
+			h.core.goalWidgetComponentRef.current = {
+				handleNavigationKey: (key: string) => { called = key; return true; },
+				handleCompactScrollKey: (key: string) => { called = key; return true; }, invalidate() {},
+			} as never;
+			syncTerminalInputPause(h.core, h.ctx);
+			assert.deepEqual(h.press(F6), { consume: true }, action.label);
+			const id = action.path.at(-1)!;
+			assert.equal(called, id === "collapse" ? "toggleExpand" : navigation[id] ?? id, action.label);
+		} finally { h.close(); }
+	}
+});
+
+test("questionnaire submit, text cancellation and paging hints match remapped keys", async () => {
+	const h = fixture({ keybindings: { dialog: { confirm: "f6", cancel: "f7", pageUp: "f8", pageDown: "f9" } } });
+	try {
+		let component: { render(width: number): string[]; handleInput(data: string): void } | undefined;
+		h.ctx.ui.custom = (factory => new Promise(resolve => {
+			component = factory(createMockTUI({ terminalRows: 32 }).tui, createMockTheme(), getKeybindings() as never, resolve) as typeof component;
+		})) as typeof h.ctx.ui.custom;
+		const question = { id: "one", question: "First?", options: ["Yes"], allowCustom: false };
+		const result = runGoalQuestionnaire(h.ctx, [question, { ...question, id: "two", question: "Second?" }]);
+		component!.handleInput(F6); component!.handleInput(F6);
+		assert.match(component!.render(100).join("\n"), /Press F6 to submit/);
+		component!.handleInput(F6); assert.equal((await result).cancelled, false);
+		const textResult = runGoalQuestionnaire(h.ctx, [{ ...question, options: [] }]);
+		assert.match(component!.render(100).join("\n"), /Enter to submit • Esc \/ F7 to cancel/);
+		component!.handleInput("\x1b[18~"); assert.equal((await textResult).cancelled, true);
+		const lines = Array.from({ length: 30 }, (_, i) => `Line ${i}`);
+		const fitted = fitDialogLines(lines, 8, 1, null, { scrollTop: 0, needsFollow: false, optionRanges: [], followIndex: 0 }, value => value, "F8/F9");
+		assert.match(fitted.at(-1)!, /F8\/F9 scroll/);
+	} finally { h.close(); }
+});
+
+test("letter-based dialog controls preserve answer text, cursor keys and native Escape", async () => {
+	const h = fixture({ keybindings: { dialog: { next: ["n", "ctrl+a"], previous: "p", cancel: "q" } } });
+	try {
+		const controls = goalDialogControls(h.cwd);
+		assert.equal(controls.matches("n", "next"), true);
+		assert.equal(controls.matches("n", "next", true), false);
+		assert.equal(controls.matches("\x01", "next", true), false);
+		assert.equal(controls.cancelEditing("q"), false);
+		assert.equal(controls.cancelEditing(ESC), true);
+		let component: { render(width: number): string[]; handleInput(data: string): void } | undefined;
+		h.ctx.ui.custom = (factory => new Promise(resolve => {
+			component = factory(createMockTUI({ terminalRows: 32 }).tui, createMockTheme(), getKeybindings() as never, resolve) as typeof component;
+		})) as typeof h.ctx.ui.custom;
+		const result = runGoalQuestionnaire(h.ctx, [{ id: "first", question: "First answer?", options: [] }, { id: "second", question: "Second answer?", options: [] }]);
+		for (const letter of "qnp") component!.handleInput(letter);
+		assert.match(component!.render(100).join("\n"), /qnp/);
+		component!.handleInput("\x01"); component!.handleInput("a"); component!.handleInput("\x05");
+		assert.match(component!.render(100).join("\n"), /aqnp/);
+		component!.handleInput(ENTER);
+		assert.match(component!.render(100).join("\n"), /Second answer/);
+		component!.handleInput(ESC); component!.handleInput("q");
+		assert.equal((await result).cancelled, true);
 	} finally { h.close(); }
 });
 

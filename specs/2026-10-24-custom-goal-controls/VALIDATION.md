@@ -1,5 +1,52 @@
 # Validation
 
+## Review follow-up for #106
+
+The review run passed **1,186 tests**, with zero failures/skips, and the manifest
+self-check. It includes all 16 command editors and slash/shortcut routes, all
+44 key editors, runtime dispatch, disable/default/inherit/reset, cancellation,
+invalid-input correction and bounded layouts at 40/72/110 × 16/20/32.
+
+All **ten actual Pi 1.4 CLI cases** pass: controls, settings paths, unsent editor
+text, command shortcuts, combined pause, goal-first immediate stop, goal-first
+natural finish, native interruption with a custom pause key, custom dialog keys,
+and multi-question answer editing with letter-based controls. Terminal captures
+include the saved pause selection, inherited source, recovery-only entry,
+custom navigation and preserved typed answers. Settings-only cases send zero
+provider requests. The local provider verifies the output file before approving
+completion; no paid provider was used.
+
+The full tests, RPC lifecycle and ten CLI cases ran together in about 70 seconds
+locally, versus about 135 seconds if their measured individual times were added.
+This is evidence on this machine, not a hosted-runner speed guarantee. The prior
+green Actions run used eight jobs, 226 elapsed seconds and 552 summed job-seconds:
+[baseline run 40084436857](https://github.com/tmonk/pi-goal-x/actions/runs/40084436857).
+The new workflow has three jobs and retains all seven SDK versions, the two
+minimum Node checks, context checks and the benchmark gate. It also retains
+completed jobs for prose-only PRs. Path tests include mixed changes and deleted
+runtime files; the parallel runner's failure test verifies that later checks
+still finish and the failure remains visible. Publication safeguards pass their
+six existing tests, and both workflow files pass actionlint 1.7.12.
+
+Final review commands:
+
+```sh
+npm run check
+npm run lint
+node --test scripts/test-ci.mjs scripts/test-publish-workflow.mjs
+python3 -B scripts/test-update-ranking.py
+node scripts/ci-checks.mjs
+node experiments/continuation/compatibility.mjs
+npm run context:gate
+npm run context:provider-check
+node --experimental-strip-types experiments/context/retention-check.mjs
+npm pack --dry-run
+npm audit --omit=dev
+```
+
+Review evidence is in `evidence/review-*.json` and `evidence/terminal/review/`.
+The original implementation evidence below is retained.
+
 2026-10-24. Base: `codex/continuation-defaults-and-prompt-profile` at 1e7a693.
 Development SDK: Pi 1.4.0, also verified as the current npm release. No PR patch,
 branch or contributor code was fetched or reused.

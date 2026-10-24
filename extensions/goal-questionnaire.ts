@@ -152,6 +152,7 @@ export function fitDialogLines(
 	proposal: ProposalPresentationSegments | null = null,
 	scroll: DialogScrollState | null = null,
 	dimStyle: (s: string) => string = (s) => s,
+	scrollHint = "PgUp/PgDn",
 ): string[] {
 	if (maxDialogLines <= 0 || lines.length <= maxDialogLines) return lines;
 	const keepHead = Math.min(protectedHead, maxDialogLines);
@@ -159,7 +160,7 @@ export function fitDialogLines(
 		return fitProposalPresentation(lines, maxDialogLines, keepHead, proposal);
 	}
 	if (scroll) {
-		return fitDialogViewport(lines, maxDialogLines, scroll, dimStyle);
+		return fitDialogViewport(lines, maxDialogLines, scroll, dimStyle, scrollHint);
 	}
 	// Context-heavy / input / submit dialogs without a scroll state: keep the
 	// head and the tail (options/footer/bottom border) exactly as the pre-fix
@@ -187,6 +188,7 @@ function fitDialogViewport(
 	maxDialogLines: number,
 	scroll: DialogScrollState,
 	dimStyle: (s: string) => string,
+	scrollHint: string,
 ): string[] {
 	const contentWindow = Math.max(0, maxDialogLines - 1);
 	const contentEnd = Math.max(0, lines.length - 1);
@@ -215,7 +217,7 @@ function fitDialogViewport(
 		// dashboard's `… +N more task` rows) and gives way to the border at the
 		// end. The footer hint sits directly above the border, so it is only
 		// visible when the end is reached (never while clipped — geometry).
-		viewport.push(dimStyle(`… +${hiddenBelow} more · PgUp/PgDn scroll`));
+		viewport.push(dimStyle(`… +${hiddenBelow} more · ${scrollHint} scroll`));
 	} else {
 		viewport.push(lines[lines.length - 1]!);
 	}
@@ -637,7 +639,7 @@ function advanceAfterAnswer() {
 
 		function handleInput(data: string) {
 			if (inputMode) {
-				if (controls.matches(data, "cancel")) {
+				if (controls.cancelEditing(data)) {
 					const q = currentQuestion();
 					if (q && q.options.length === 0 && !isMulti) submit(true);
 					else {
@@ -917,7 +919,7 @@ function advanceAfterAnswer() {
 				add(theme.fg("muted", " Your answer:"));
 				for (const line of editor.render(safeWidth - 2)) add(` ${line}`);
 				lines.push("");
-				add(theme.fg("dim", " Enter to submit • Esc to cancel"));
+				add(theme.fg("dim", ` Enter to submit • ${controls.editorCancelHint()} to cancel`));
 			} else if (currentTab === questions.length) {
 				add(theme.fg("accent", theme.bold(" Ready to submit")));
 				protectedCount = lines.length;
@@ -927,7 +929,7 @@ function advanceAfterAnswer() {
 					add(`${theme.fg("muted", ` ${question.id}: `)}${answer ? theme.fg("text", `${answer.wasCustom ? "(wrote) " : ""}${answer.answer}`) : theme.fg("warning", "(unanswered)")}`);
 				}
 				lines.push("");
-				add(allAnswered() ? theme.fg("success", " Press Enter to submit") : theme.fg("warning", ` Unanswered: ${questions.filter((qq) => !answers.has(qq.id)).map((qq) => qq.id).join(", ")}`));
+				add(allAnswered() ? theme.fg("success", ` Press ${controls.hint("confirm")} to submit`) : theme.fg("warning", ` Unanswered: ${questions.filter((qq) => !answers.has(qq.id)).map((qq) => qq.id).join(", ")}`));
 			} else if (q) {
 				addWrapped(theme.fg("text", ` ${q.question}`));
 				questionBlockEnd = lines.length;
@@ -945,13 +947,13 @@ function advanceAfterAnswer() {
 				if (existing) add(theme.fg("dim", ` Current: ${existing.wasCustom ? "(wrote) " : ""}${existing.answer}`));
 				lines.push("");
 				if (opts.length > 0) renderOptions();
-				else add(theme.fg("muted", " Press Enter to write your answer"));
+				else add(theme.fg("muted", ` Press ${controls.hint("confirm")} to write your answer`));
 			}
 
 			lines.push("");
 			if (!inputMode) {
 				const auditorHint = auditorToggleInit ? ` • ${controls.hint("toggleAuditor")} toggle auditor` : "";
-				add(theme.fg("dim", isMulti ? ` ${controls.hint("next")}/${controls.hint("previous")} navigate • ${controls.hint("up")}${controls.hint("down")} select • ${controls.hint("confirm")} confirm • ${controls.hint("cancel")} cancel` + auditorHint : ` ${controls.hint("up")}${controls.hint("down")} navigate • ${controls.hint("confirm")} select • ${controls.hint("cancel")} cancel` + auditorHint));
+				add(theme.fg("dim", isMulti ? ` ${controls.hint("next")}/${controls.hint("previous")} navigate • ${controls.navigationHint()} select • ${controls.hint("confirm")} confirm • ${controls.hint("cancel")} cancel` + auditorHint : ` ${controls.navigationHint()} navigate • ${controls.hint("confirm")} select • ${controls.hint("cancel")} cancel` + auditorHint));
 			}
 			add(theme.fg("accent", "─".repeat(safeWidth)));
 			// Safety net: ensure no returned line exceeds the terminal width
@@ -991,14 +993,14 @@ function advanceAfterAnswer() {
 						// Pathological: options alone overflow the bound — scroll
 						// viewport is the last resort (nothing ever hidden).
 						const scrollState = { scrollTop, needsFollow, optionRanges, followIndex: optionIndex };
-						lines = fitDialogLines(lines, maxDialogLines, protectedCount, null, scrollState, (s) => theme.fg("dim", s));
+						lines = fitDialogLines(lines, maxDialogLines, protectedCount, null, scrollState, (s) => theme.fg("dim", s), controls.pagingHint());
 						scrollTop = scrollState.scrollTop;
 						needsFollow = scrollState.needsFollow;
 					}
 				} else {
 					// Input mode, submit tab: legacy tail-keep / viewport behavior.
 					const scrollState = !inputMode ? { scrollTop, needsFollow, optionRanges, followIndex: optionIndex } : null;
-					lines = fitDialogLines(lines, maxDialogLines, protectedCount, null, scrollState, (s) => theme.fg("dim", s));
+					lines = fitDialogLines(lines, maxDialogLines, protectedCount, null, scrollState, (s) => theme.fg("dim", s), controls.pagingHint());
 					if (scrollState) {
 						scrollTop = scrollState.scrollTop;
 						needsFollow = scrollState.needsFollow;
