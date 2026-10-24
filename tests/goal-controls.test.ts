@@ -9,7 +9,7 @@ import goalExtension from "../extensions/goal.ts";
 import type { GoalCore } from "../extensions/goal-state.ts";
 import {
 	GOAL_COMMANDS, GOAL_KEY_ACTIONS, commandProblems, commandRoutes, matchCommandRoute,
-	normalizeGoalKey, sameGoalKey, parseCommandPaths, parseGoalKeybinding, keybindingProblems,
+	normalizeGoalKey, sameGoalKey, parseCommandPaths, parseGoalKeybinding, keybindingProblems, commandHint,
 } from "../extensions/goal-controls.ts";
 import { loadSettingsSnapshot, mutateSettingsLayer, SettingsMutationError, invalidateGoalSettingsCache } from "../extensions/goal-settings.ts";
 import { syncTerminalInputPause } from "../extensions/goal-widget.ts";
@@ -18,6 +18,8 @@ import { createMockTheme, createMockTUI } from "./tui-test-utils.ts";
 import { goalPrompt } from "../extensions/prompts/goal-prompts.ts";
 import { goalDialogControls } from "../extensions/goal-dialog-controls.ts";
 import { showEscapeDialog } from "../extensions/widgets/goal-escape-dialog.ts";
+import { detailedSummary } from "../extensions/goal-format.ts";
+import { formatRecoveryReport, runRecoveryReport } from "../extensions/goal-recovery.ts";
 
 const ESC = "\x1b", ENTER = "\r", DOWN = "\x1b[B", UP = "\x1b[A", TAB = "\t";
 const F6 = "\x1b[17~";
@@ -91,6 +93,7 @@ test("control grammar normalizes aliases/modifiers, preserves disabled lists and
 	assert.equal(sameGoalKey("ctrl+[", "escape", true), false);
 	assert.deepEqual(parseCommandPaths(["/goal   edit", "goal edit"]), ["goal edit"]);
 	assert.equal(parseCommandPaths(["/goal edit; bash"]), undefined);
+	assert.equal(commandHint("goal-settings", { "goal-settings": [] }), "/goal-settings");
 });
 
 test("routes match whole words, prefer subcommands and preserve objective whitespace", () => {
@@ -152,6 +155,10 @@ test("custom command roots register once, complete subcommands and keep settings
 		await h.commands.get("work").handler("unknown", h.ctx);
 		assert.ok(h.notifications.at(-1)?.includes("/work edit"));
 		assert.equal(h.messages.length, 0);
+		assert.ok(detailedSummary(null, { goal: ["work new"] }).includes("/work new"));
+		const report = { ...runRecoveryReport(h.ctx), orphanedSnapshotGoals: [{ goalId: "missing", activePath: "missing.md" }] };
+		assert.ok(formatRecoveryReport(report, { "goal-recovery": ["doctor"] }).includes("/doctor repair"));
+		assert.ok(formatRecoveryReport(report, { "goal-recovery": [] }).includes("Enable a recovery command"));
 		await h.commands.get("work").handler("new Write a poem", h.ctx);
 		assert.ok(h.messages.some(message => String(message).includes("Write a poem")));
 	} finally { h.close(); }

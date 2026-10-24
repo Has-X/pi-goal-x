@@ -310,7 +310,7 @@ export function registerDraftingTools(core: GoalCore): void {
 		description: "Present the drafted objective and agent-selected task plan for explicit user confirmation.",
 		promptSnippet: "Confirm the proposed goal and any useful task tree in one dialog.",
 		promptGuidelines: [
-			"Use only during a /goal, /sisyphus, or /goal-tweak guided draft.",
+			commandInstructions("Use only during a /goal, /sisyphus, or /goal-tweak guided draft.", core.loadedCommands),
 			"Clarify ambiguity before proposing. Include tasks when the work naturally decomposes into trackable milestones; omit them for genuinely simple work.",
 			"Set token_budget only when the user explicitly asked for a token budget or a spend limit. Never invent, estimate, or infer one from the objective's size; omitting it creates a goal with no budget.",
 			"Confirmation creates or revises the goal atomically. Continue Chatting leaves drafting active for refinement.",

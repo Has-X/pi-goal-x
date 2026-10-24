@@ -177,7 +177,7 @@ export function registerGoalCommands(core: GoalCore): void {
 		}
 		if (!current) {
 			const openCount = otherOpenGoalCount(core.goalsById, null);
-			ctx.ui.notify(openCount > 0 ? buildUnfocusedOpenGoalsSummary(openCount) : detailedSummary(null), "info");
+			ctx.ui.notify(openCount > 0 ? buildUnfocusedOpenGoalsSummary(openCount) : detailedSummary(null, core.loadedCommands), "info");
 			return;
 		}
 		ctx.ui.notify(`Goal unfocused for this session. It remains open in .pi/goals: ${current.id}`, "info");
@@ -227,7 +227,7 @@ export function registerGoalCommands(core: GoalCore): void {
 			? `\n\n${formatCheckpointHealthReport(checkpointHealth, sessionFile)}`
 			: "";
 		ctx.ui.notify(
-			formatRecoveryReport(report) + checkpointSection,
+			formatRecoveryReport(report, core.loadedCommands) + checkpointSection,
 			report.healthy && (checkpointHealth?.legacyFull ?? 0) === 0 ? "info" : "warning",
 		);
 	}

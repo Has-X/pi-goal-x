@@ -147,6 +147,7 @@ export function commandPaths(commands: GoalCommands | undefined, id: GoalCommand
 }
 export function commandHint(id: GoalCommandId, commands?: GoalCommands): string {
 	const first = commandPaths(commands, id)[0];
+	if (!first && id === "goal-settings") return "/goal-settings";
 	return first ? `/${first}` : `/goal-settings controls to enable ${GOAL_COMMANDS.find(([action]) => action === id)![1].toLowerCase()}`;
 }
 const commandReference = new RegExp(`/(${GOAL_COMMANDS.map(([id]) => id).sort((a, b) => b.length - a.length).join("|")})(?![a-z0-9_-])`, "g");
