@@ -88,6 +88,13 @@ test("native replacement preserves data and goal-file permissions; failed writes
 	atomicWriteGoalFile({cwd}, ".pi/goals", ".pi/goals/goal.md", "replacement");
 	assert.equal(fs.readFileSync(goal, "utf8"), "replacement");
 	if (process.platform !== "win32") assert.equal(fs.statSync(goal).mode & 0o777, 0o600);
+	if (process.platform !== "win32") {
+		fs.chmodSync(goal, 0o640);
+		const priorMask = process.umask(0o077);
+		try { atomicWriteGoalFile({cwd}, ".pi/goals", ".pi/goals/goal.md", "private replacement"); }
+		finally { process.umask(priorMask); }
+		assert.equal(fs.statSync(goal).mode & 0o777, 0o640, "replacement preserves existing permissions under a stricter umask");
+	}
 	fs.mkdirSync(path.join(cwd, ".pi/goals/directory.md"));
 	assert.throws(() => atomicWriteGoalFile({cwd}, ".pi/goals", ".pi/goals/directory.md", "invalid"));
 	assert.equal(fs.readdirSync(path.join(cwd, ".pi/goals")).some(name => name.endsWith(".tmp")), false);

@@ -283,6 +283,8 @@ export function atomicWriteGoalFile(ctx: GoalFileContext, rootRel: string, relPa
 	try {
 		fd = fs.openSync(tempPath, "wx", prior ? prior.mode & 0o777 : 0o666);
 		created = true;
+		// open() applies the process umask even when replacing an existing file.
+		if (prior && process.platform !== "win32" && (prior.mode & 0o777 & process.umask())) fs.fchmodSync(fd, prior.mode & 0o777);
 		fs.writeFileSync(fd, content, "utf8");
 		fs.closeSync(fd);
 		fd = undefined;

@@ -11,12 +11,22 @@ import {atomicWriteGoalFile} from "../../extensions/storage/goal-files.ts";
 
 const script = `
 $ErrorActionPreference = 'Stop'
-$stream = [System.IO.File]::Open($env:PI_GOAL_TEST_LOCK, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::ReadWrite)
-try {
-  [Console]::WriteLine('READY'); [Console]::Out.Flush()
-  while (!(Test-Path -LiteralPath $env:PI_GOAL_TEST_RELEASE)) { Start-Sleep -Milliseconds 1 }
-  Start-Sleep -Milliseconds 10
-} finally { $stream.Dispose() }
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Threading;
+public static class GoalSharingLock {
+  public static void Hold(string target, string release) {
+    using (var stream = File.Open(target, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite)) {
+      File.Exists(release); Thread.Sleep(1);
+      Console.WriteLine("READY"); Console.Out.Flush();
+      while (!File.Exists(release)) Thread.Sleep(1);
+      Thread.Sleep(10);
+    }
+  }
+}
+'@
+[GoalSharingLock]::Hold($env:PI_GOAL_TEST_LOCK, $env:PI_GOAL_TEST_RELEASE)
 `;
 
 async function lock(target: string, release: string) {
@@ -26,8 +36,9 @@ async function lock(target: string, release: string) {
 	let output = "", errors = "";
 	child.stderr.on("data", chunk => {errors += chunk;});
 	await new Promise<void>((resolve, reject) => {
-		const timeout = setTimeout(() => reject(new Error(`Windows lock startup timed out: ${errors}`)), 10000);
-		child.once("error", reject);
+		const fail = (error: Error) => {clearTimeout(timeout); child.kill(); reject(error);};
+		const timeout = setTimeout(() => fail(new Error(`Windows lock startup timed out: ${errors}`)), 10000);
+		child.once("error", fail);
 		child.once("exit", code => {clearTimeout(timeout); if (!output.includes("READY")) reject(new Error(`Lock exited ${code}: ${errors}`));});
 		child.stdout.on("data", chunk => {output += chunk; if (output.includes("READY")) {clearTimeout(timeout); resolve();}});
 	});
