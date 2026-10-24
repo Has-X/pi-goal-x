@@ -406,6 +406,14 @@ test("controls UI records keys, blocks conflicts and supports scoped inheritance
 		d.press("\x13", ENTER, DOWN, DOWN, DOWN, DOWN, DOWN, ENTER);
 		assert.deepEqual(loadSettingsSnapshot(h.cwd).value.keybindings?.pause, ["f7"]);
 		assert.equal(loadSettingsSnapshot(h.cwd).provenance.get("keybindings.pause")?.source, "global");
+		// Editing a value can remove its row from the current search results.
+		h.mutate("project", "set", ["keybindings", "dashboard", "scrollUp"], "f8");
+		h.mutate("project", "set", ["keybindings", "dashboard", "up"], "f8");
+		const filtered = dialog(h);
+		filtered.press(TAB, "F8", DOWN, ENTER, DOWN, DOWN, ENTER, "\x15", "f9", ENTER);
+		filtered.text();
+		filtered.press(ENTER);
+		assert.match(filtered.text(), /Record a replacement key/, "Enter edits the row currently highlighted after filtering");
 	} finally { h.close(); }
 });
 

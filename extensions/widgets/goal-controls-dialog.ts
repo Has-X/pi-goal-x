@@ -237,6 +237,7 @@ export class GoalControlsDialog implements Component {
 		if (this.view === "list") {
 			const rows = this.rows();
 			const selected = Math.max(0, Math.min(this.selection[this.tabIndex]!, rows.length - 1));
+			this.selection[this.tabIndex] = selected;
 			lines.push(dim(`Search: ${this.query.getValue() || "type to filter"}`));
 			const capacity = Math.max(1, height - 10);
 			const start = Math.max(0, Math.min(selected - Math.floor(capacity / 2), rows.length - capacity));
