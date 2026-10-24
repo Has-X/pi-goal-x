@@ -16,6 +16,13 @@ commands:
   finish: /spec-finish [spec-id-or-path]
   settings: /specs-settings
 specs:
+  - id: 2026-10-24-custom-goal-controls
+    path: specs/2026-10-24-custom-goal-controls
+    title: Configurable goal commands, shortcuts and pause order
+    status: completed
+    focused: false
+    last_audit: null
+    updated: 2026-10-24
   - id: 2026-10-24-pi-1-4-compatibility
     path: specs/2026-10-24-pi-1-4-compatibility
     title: Current Pi development SDK and native host integration

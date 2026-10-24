@@ -38,6 +38,8 @@ jobs:
         run: npm run test:all
       - name: Installed Pi CLI lifecycle
         run: node scripts/live-session-check.mjs
+      - name: Installed Pi controls walkthrough
+        run: npm run test:controls-cli
       - name: Test-manifest self-check
         run: npm run test:selfcheck
       - name: Package dry run

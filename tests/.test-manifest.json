@@ -13,6 +13,7 @@
     ".tests/goal-compaction.test.ts",
     ".tests/goal-comprehensive-optimization.test.ts",
     ".tests/goal-context-usage.test.ts",
+    ".tests/goal-controls.test.ts",
     ".tests/goal-core-tools.test.ts",
     ".tests/goal-core.test.ts",
     ".tests/goal-dashboard-golden.test.ts",

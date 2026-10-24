@@ -12,12 +12,14 @@ import goalExtension from '../extensions/goal.ts';
 
 const mode=process.argv[2]??'draft';
 const startupAbort=mode==='abort';
-const lifecycle=mode==='pause'||mode==='reload'||startupAbort;
+const turnFirst=mode==='turn-first';
+const lifecycle=mode==='pause'||mode==='reload'||startupAbort||turnFirst;
 const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'goal-user-sdk-'));
 const originalGlobal=process.env.PI_GOAL_GLOBAL_SETTINGS_FILE;
 process.env.PI_GOAL_GLOBAL_SETTINGS_FILE=path.join(cwd,'global.json');
 const requests=[],choices=[],errors=[];
-let session,core,piApi,step=0,auditStep=0,held=false,releaseHold,paused=false,nativePromptPreparation=false,pausedBeforeAnyRequest;
+let session,core,piApi,step=0,auditStep=0,held=false,releaseHold,paused=false,nativePromptPreparation=false,pausedBeforeAnyRequest,settlementHeld=false,releaseSettlement,resumed=false,heldBeforeResume=false;
+if(turnFirst){fs.mkdirSync(path.join(cwd,'.pi'));fs.writeFileSync(path.join(cwd,'.pi/pi-goal-x-settings.json'),JSON.stringify({pauseOrder:'turn-first'}));}
 const externalGuard='EXTERNAL_GOAL_GUARD: preserve this instruction across custom tool turns.';
 const tool=(name,args)=>({tool:name,args});
 const plan=[{text:'Compare the two assumptions before selecting an approach.'},{text:'The second approach satisfies both constraints; record and check it next.'},tool('publish_report',{stage:1}),{text:'The report section is saved.'},tool('write',{path:'result.txt',content:'verified result\n'}),tool('read',{path:'result.txt'}),tool('update_goal',{status:'complete'})];
@@ -55,6 +57,9 @@ try{
    event.systemPromptOptions.sections.external_goal_guard=externalGuard;
    if(startupAbort&&event.messageType==='custom'&&!held){held=true;await new Promise(resolve=>{releaseHold=resolve;});}
   });
+  pi.on('agent_before_settle',async()=>{
+   if(turnFirst&&held&&!resumed&&!settlementHeld){settlementHeld=true;await new Promise(resolve=>{releaseSettlement=resolve;});}
+  });
   pi.registerTool(defineTool({name:'publish_report',label:'Publish',description:'Save a completed report section.',parameters:Type.Object({stage:Type.Number()}),async execute(_id,args){fs.writeFileSync(path.join(cwd,'report.txt'),`section ${args.stage}\n`);return{content:[{type:'text',text:'Saved; invoice status pending is unrelated.'}],details:{id:'invoice',status:'pending'}};}}));
  }]});
  await loader.reload();
@@ -63,10 +68,18 @@ try{
   async select(title,options){const answer=options.find(o=>/confirm.*create/i.test(o))??options.find(o=>/^Enabled\b/.test(o))??options[0];choices.push({title:title.split('\n')[0],answer});return answer;},
   async confirm(){return true;},async input(){return 'Use the stated objective.';}},onError:event=>errors.push(event.error)});
  await bind();
- const command=`/${mode==='direct'||mode==='reload'||startupAbort?'goal-direct':'goal'} Create result.txt containing exactly verified result followed by a newline, verify it and finish.`;
+ const command=`/${mode==='direct'||mode==='reload'||startupAbort||turnFirst?'goal-direct':'goal'} Create result.txt containing exactly verified result followed by a newline, verify it and finish.`;
  const start=session.prompt(command);
  if(lifecycle){
   await until(()=>held);
+  if(turnFirst){
+   core.interruption.pause(session.extensionRunner.createContext());
+   await until(()=>settlementHeld||session.isIdle);
+   heldBeforeResume=core.interruption.isHeld();assert.equal(heldBeforeResume,true);
+   assert.equal(core.state.goal.status,'active');
+   await session.prompt('/goal-resume');resumed=true;
+   releaseSettlement?.();releaseHold();await start;
+  }else{
   // Older hosts have no cancellable custom-start hook; use their ordinary pause
   // control. Current hosts must honor abort before making any provider request.
   if(!startupAbort||!nativePromptPreparation)await session.prompt('/goal-pause');
@@ -77,6 +90,7 @@ try{
   releaseHold();await start;
   if(mode==='reload'){await session.reload();await bind();core=piApi._goalCore;assert.equal(core.state.goal?.status,'paused');}
   await session.prompt('/goal-resume');
+  }
  }else await start;
  await until(()=>fs.existsSync(path.join(cwd,'result.txt'))&&!core.state.goal&&session.isIdle);
  assert.equal(fs.readFileSync(path.join(cwd,'result.txt'),'utf8'),'verified result\n');
@@ -87,11 +101,11 @@ try{
  if(nativePromptPreparation)for(const request of execution)assert.ok(request.system.includes(externalGuard),'native prompt preparation preserves another extension instruction');
  assert.equal(new Set(execution.map(r=>r.hash)).size,1,'initial and subsequent executor system prefixes match');
  assert.equal(requests.filter(r=>r.phase==='audit'&&r.action==='read').length,1,'actual auditor reads the artifact');
- const result={passed:true,mode,command,choices,requests:requests.map(({system:_system,...r})=>r),initialExecutionPromptCorrect:true,executorPrefixStable:true,nativePromptPreparation,externalPromptInstructionPreserved:nativePromptPreparation?true:undefined,artifact:'verified result\n',report:!lifecycle?'section 1\n':undefined,paused,pausedBeforeAnyRequest,reloadedWhilePaused:mode==='reload',errors};
+ const result={passed:true,mode,command,choices,requests:requests.map(({system:_system,...r})=>r),initialExecutionPromptCorrect:true,executorPrefixStable:true,nativePromptPreparation,externalPromptInstructionPreserved:nativePromptPreparation?true:undefined,artifact:'verified result\n',report:!lifecycle?'section 1\n':undefined,paused,pausedBeforeAnyRequest,heldBeforeResume:turnFirst?heldBeforeResume:undefined,reloadedWhilePaused:mode==='reload',errors};
  if(process.env.PI_GOAL_USER_EVIDENCE)fs.writeFileSync(process.env.PI_GOAL_USER_EVIDENCE,JSON.stringify(result,null,2)+'\n');
  console.log(JSON.stringify(result));
 }finally{
- releaseHold?.();core?.scheduler.shutdown();core?.runtime.clearContinuationState();core?.stopAuditAnimation();
+ releaseSettlement?.();releaseHold?.();core?.scheduler.shutdown();core?.runtime.clearContinuationState();core?.stopAuditAnimation();
  if(session){await session.abort();session.dispose();}server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
  fs.rmSync(cwd,{recursive:true,force:true});if(originalGlobal===undefined)delete process.env.PI_GOAL_GLOBAL_SETTINGS_FILE;else process.env.PI_GOAL_GLOBAL_SETTINGS_FILE=originalGlobal;
 }

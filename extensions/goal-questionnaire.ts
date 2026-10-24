@@ -1,5 +1,6 @@
+import { goalDialogControls } from "./goal-dialog-controls.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Editor, type EditorTheme, Key, matchesKey, Text, visibleWidth } from "@earendil-works/pi-tui";
+import { Editor, type EditorTheme, Text, visibleWidth } from "@earendil-works/pi-tui";
 import { truncateToWidth, wrapTextWithAnsi } from "./widgets/text-cache.ts";
 
 
@@ -104,7 +105,7 @@ export function findProposalPresentationSegments(lines: string[], tailStart: num
 	// so pull the tail start back to it when present.
 	let effectiveTail = tailStart;
 	for (let i = tailStart - 1; i > tasksEnd; i--) {
-		if (lines[i]!.includes("press 'a' to toggle")) {
+		if (/Auditor (enabled|disabled).*to toggle/.test(stripAnsiCodes(lines[i]!))) {
 			effectiveTail = i;
 			break;
 		}
@@ -253,7 +254,7 @@ function fitProposalPresentation(
 	// the tasks from the start. The dropped task lines remain fully readable in
 	// the scrollback presentation. Never exceeds maxDialogLines.
 	const tailNoBlanks = tail.filter((l) => l.trim() !== "");
-	const hasAuditor = tail.length > 0 && tail[0]!.includes("press 'a' to toggle");
+	const hasAuditor = tail.length > 0 && /Auditor (enabled|disabled).*to toggle/.test(stripAnsiCodes(tail[0]!));
 	const restTail = hasAuditor ? tailNoBlanks.slice(1) : tailNoBlanks;
 	const keepRest = Math.min(restTail.length, Math.max(0, maxDialogLines - keepHead - (hasAuditor ? 1 : 0)));
 	const tailKept = [...(hasAuditor ? [tail[0]!] : []), ...restTail.slice(restTail.length - keepRest)];
@@ -387,6 +388,7 @@ export async function runGoalQuestionnaire(ctx: ExtensionContext, rawQuestions: 
 	const isMulti = questions.length > 1;
 	const totalTabs = questions.length + 1;
 
+	const controls = goalDialogControls(typeof ctx.cwd === "string" ? ctx.cwd : process.cwd());
 	const showRichDialog = async () => await ctx.ui.custom<GoalQuestionnaireResult | undefined>((tui, theme, _kb, done) => {
 		// Some web hosts invoke the factory with a render callback in place of a TUI.
 		if (!tui || typeof tui.getShowHardwareCursor !== "function" || typeof tui.setShowHardwareCursor !== "function" || typeof tui.requestRender !== "function") {
@@ -635,7 +637,7 @@ function advanceAfterAnswer() {
 
 		function handleInput(data: string) {
 			if (inputMode) {
-				if (matchesKey(data, Key.escape)) {
+				if (controls.matches(data, "cancel")) {
 					const q = currentQuestion();
 					if (q && q.options.length === 0 && !isMulti) submit(true);
 					else {
@@ -644,9 +646,9 @@ function advanceAfterAnswer() {
 					}
 					return;
 				}
-				if (isMulti && (matchesKey(data, Key.tab) || matchesKey(data, Key.shift("tab")))) {
+				if (isMulti && (controls.matches(data, "next", true) || controls.matches(data, "previous", true))) {
 					exitEditor();
-					currentTab = matchesKey(data, Key.tab) ? (currentTab + 1) % totalTabs : (currentTab - 1 + totalTabs) % totalTabs;
+					currentTab = controls.matches(data, "next", true) ? (currentTab + 1) % totalTabs : (currentTab - 1 + totalTabs) % totalTabs;
 					const nextQ = currentQuestion();
 					if (nextQ) enterQuestion(nextQ);
 					else enterSubmitTab();
@@ -662,7 +664,7 @@ function advanceAfterAnswer() {
 			const opts = displayOptions();
 
 			if (isMulti) {
-				if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
+				if (controls.matches(data, "next")) {
 					currentTab = (currentTab + 1) % totalTabs;
 					const nextQ = currentQuestion();
 					if (nextQ) enterQuestion(nextQ);
@@ -670,7 +672,7 @@ function advanceAfterAnswer() {
 					refresh();
 					return;
 				}
-				if (matchesKey(data, Key.shift("tab")) || matchesKey(data, Key.left)) {
+				if (controls.matches(data, "previous")) {
 					currentTab = (currentTab - 1 + totalTabs) % totalTabs;
 					const nextQ = currentQuestion();
 					if (nextQ) enterQuestion(nextQ);
@@ -684,25 +686,25 @@ function advanceAfterAnswer() {
 			// submit summary): page and line scroll without moving the selection.
 			// Handled before the submit-tab early return so the summary scrolls
 			// too. ↑/↓ still select and auto-follow into view on the next render.
-			if (matchesKey(data, Key.pageUp)) {
+			if (controls.matches(data, "pageUp")) {
 				scrollTop -= Math.max(1, (maxDialogLines ?? 10) - 1);
 				needsFollow = false;
 				refresh();
 				return;
 			}
-			if (matchesKey(data, Key.pageDown)) {
+			if (controls.matches(data, "pageDown")) {
 				scrollTop += Math.max(1, (maxDialogLines ?? 10) - 1);
 				needsFollow = false;
 				refresh();
 				return;
 			}
-			if (matchesKey(data, Key.ctrl("up"))) {
+			if (controls.matches(data, "scrollUp")) {
 				scrollTop -= 1;
 				needsFollow = false;
 				refresh();
 				return;
 			}
-			if (matchesKey(data, Key.ctrl("down"))) {
+			if (controls.matches(data, "scrollDown")) {
 				scrollTop += 1;
 				needsFollow = false;
 				refresh();
@@ -710,18 +712,18 @@ function advanceAfterAnswer() {
 			}
 
 			if (currentTab === questions.length) {
-				if (matchesKey(data, Key.enter) && allAnswered()) submit(false);
-				else if (matchesKey(data, Key.escape)) submit(true);
+				if (controls.matches(data, "confirm") && allAnswered()) submit(false);
+				else if (controls.matches(data, "cancel")) submit(true);
 				return;
 			}
 
-			if (matchesKey(data, Key.up)) {
+			if (controls.matches(data, "up")) {
 				optionIndex = Math.max(0, optionIndex - 1);
 				needsFollow = true; // §options-scroll: keep the selection visible
 				refresh();
 				return;
 			}
-			if (matchesKey(data, Key.down)) {
+			if (controls.matches(data, "down")) {
 				optionIndex = Math.min(opts.length - 1, optionIndex + 1);
 				needsFollow = true;
 				refresh();
@@ -729,13 +731,13 @@ function advanceAfterAnswer() {
 			}
 
 			// Auditor toggle hotkey
-			if (matchesKey(data, "a") && auditorToggleInit) {
+			if (controls.matches(data, "toggleAuditor") && auditorToggleInit) {
 				auditorEnabled = !auditorEnabled;
 				refresh();
 				return;
 			}
 
-			if (matchesKey(data, Key.enter) && q) {
+			if (controls.matches(data, "confirm") && q) {
 				if (q.options.length === 0 || opts[optionIndex]?.isCustom) {
 					enterInputMode(q.id);
 					refresh();
@@ -749,7 +751,7 @@ function advanceAfterAnswer() {
 				return;
 			}
 
-			if (matchesKey(data, Key.escape)) submit(true);
+			if (controls.matches(data, "cancel")) submit(true);
 		}
 
 			function render(width: number): string[] {
@@ -936,7 +938,7 @@ function advanceAfterAnswer() {
 					const circle = auditorEnabled ? "●" : "○";
 					const label = auditorEnabled ? "Auditor enabled" : "Auditor disabled";
 					const color = auditorEnabled ? "success" : "warning";
-					add(theme.fg(color, ` ${circle} ${label}`) + theme.fg("dim", "  (press 'a' to toggle)"));
+					add(theme.fg(color, ` ${circle} ${label}`) + theme.fg("dim", `  (press '${controls.hint("toggleAuditor")}' to toggle)`));
 					lines.push("");
 				}
 				const existing = answers.get(q.id);
@@ -948,8 +950,8 @@ function advanceAfterAnswer() {
 
 			lines.push("");
 			if (!inputMode) {
-				const auditorHint = auditorToggleInit ? " • a toggle auditor" : "";
-				add(theme.fg("dim", isMulti ? " Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel" + auditorHint : " ↑↓ navigate • Enter select • Esc cancel" + auditorHint));
+				const auditorHint = auditorToggleInit ? ` • ${controls.hint("toggleAuditor")} toggle auditor` : "";
+				add(theme.fg("dim", isMulti ? ` ${controls.hint("next")}/${controls.hint("previous")} navigate • ${controls.hint("up")}${controls.hint("down")} select • ${controls.hint("confirm")} confirm • ${controls.hint("cancel")} cancel` + auditorHint : ` ${controls.hint("up")}${controls.hint("down")} navigate • ${controls.hint("confirm")} select • ${controls.hint("cancel")} cancel` + auditorHint));
 			}
 			add(theme.fg("accent", "─".repeat(safeWidth)));
 			// Safety net: ensure no returned line exceeds the terminal width

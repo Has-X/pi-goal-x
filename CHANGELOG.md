@@ -4,6 +4,11 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- A Controls screen in `/goal-settings` for command names and aliases, every public goal shortcut, goal-dialog keys and project/global inheritance. Commands can use subcommands such as `/goal edit`; `/goal-settings` stays available for recovery.
+- Configurable pause order: stop goal and turn together (the default), pause the goal first, or stop the turn first and wait for the user. Moving the pause key keeps Pi's interrupt available as a turn-only stop.
+
 ### Changed
 
 - Develop and test against Pi 1.4.0. Use its native custom-turn prompt preparation while retaining the fallback for older hosts, honor startup cancellation, and run CLI checks against the repository's SDK.

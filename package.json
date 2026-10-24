@@ -40,7 +40,8 @@
     "docs/pi-goal-x-unified-dashboard-plan.md",
     "docs/unified-dashboard.md",
     "assets/badge-light.svg",
-    "assets/badge-dark.svg"
+    "assets/badge-dark.svg",
+    "docs/controls.md"
   ],
   "pi": {
     "extensions": [
@@ -71,7 +72,8 @@
     "bench:gate:runtime-token": "node experiments/bench/runtime-token-gate.mjs",
     "test:oracle": "node --experimental-strip-types --test tests/goal-oracle.test.ts",
     "bench:comprehensive": "node --import ./experiments/bench/bench-adapter-hooks.mjs --expose-gc --experimental-strip-types experiments/bench/comprehensive.mjs",
-    "bench:gate:comprehensive": "node experiments/bench/comprehensive-gate.mjs"
+    "bench:gate:comprehensive": "node experiments/bench/comprehensive-gate.mjs",
+    "test:controls-cli": "node experiments/controls/cli-walkthrough.mjs"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.83.0 <2.0.0",
