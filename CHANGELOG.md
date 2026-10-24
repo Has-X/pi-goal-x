@@ -4,6 +4,18 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Develop and test against Pi 1.4.0. Use its native custom-turn prompt preparation while retaining the fallback for older hosts, honor startup cancellation, and run CLI checks against the repository's SDK.
+- Accept `max` thinking for the completion auditor and blocker Oracle in settings and the selector.
+
+### Fixed
+
+- Skip audit-message settlement callbacks whose Pi context was invalidated by session replacement or reload, preserving replacement-session messages and scheduling intent (#90).
+- Goal execution requests use the current Pi prompt and tool profile from their first request, including direct creation, draft confirmation, resume and reload. This fixes stale or missing prompt guidance on structured-transcript hosts without changing host internals.
+- Restore immediate continuation by default. Optional `idleContinuationBackoff` slows repeated replies without recognized work, with saved delays, live opt-out and unchanged run accounting (#100). It is off by default and does not guarantee loop termination.
+- Expose the project/global settings scope switch and keep delay timing and resume controls visible in the compact widget.
+
 ## [0.32.3] — 2026-10-02
 
 ### Fixed

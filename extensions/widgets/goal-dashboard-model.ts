@@ -1,4 +1,4 @@
-import { schedulerSummary } from "../goal-scheduler-state.ts";
+import { schedulerSummaryParts } from "../goal-scheduler-state.ts";
 import { taskIndex } from "../goal-task-index.ts";
 /**
  * Shared dashboard view model (plan §6) — the single source of truth for the
@@ -24,6 +24,7 @@ export type DashboardStatusCode = "running" | "idle" | "paused" | "blocked" | "b
 
 export interface GoalDashboardModel {
 	scheduling: string[];
+	idlePacing?: string;
 	goalId: string;
 	title: string;
 
@@ -103,6 +104,7 @@ export interface DashboardTaskNode {
 
 export interface GoalDashboardModelOptions {
 	maxAutonomousRuns?: number;
+	idleContinuationBackoff?: boolean;
 	/** Report the runs line for a finite allowance (default on). */
 	showAutonomousRuns?: boolean;
 	focused: boolean;
@@ -499,8 +501,10 @@ export function deriveGoalDashboardModel(
 	if (goal.usage.activeSeconds > 0) footerUsageBits.push(formatDuration(goal.usage.activeSeconds));
 	if (goal.usage.tokensUsed > 0) footerUsageBits.push(formatCompactTokens(goal.usage.tokensUsed));
 
+	const scheduling = schedulerSummaryParts(goal.scheduler, options.maxAutonomousRuns, options.showAutonomousRuns !== false, options.idleContinuationBackoff === true);
 	return {
-		scheduling: schedulerSummary(goal.scheduler, options.maxAutonomousRuns, options.showAutonomousRuns !== false).split("\n").filter(Boolean),
+		scheduling: [scheduling.runs, ...scheduling.instructions.split("\n")].filter(Boolean),
+		idlePacing: scheduling.idlePacing,
 		goalId: goal.id,
 		title: displayObjectiveTitle(goal.objective),
 		status,

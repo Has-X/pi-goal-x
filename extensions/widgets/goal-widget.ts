@@ -555,6 +555,7 @@ export class GoalWidgetComponent implements Component {
 			ledgerEvents: this.getLedgerEvents(),
 			tasksDisabled: settings.disableTasks === true,
 			maxAutonomousRuns: settings.maxAutonomousRuns,
+			idleContinuationBackoff: settings.idleContinuationBackoff,
 		}) : null;
 		this.maybeReanchor(model);
 		const lines = renderGoalWidgetLines(this.getGoal(), this.theme, safeWidth, {
@@ -638,6 +639,7 @@ export class GoalWidgetComponent implements Component {
 			ledgerEvents: this.getLedgerEvents(),
 			tasksDisabled: settings.disableTasks === true,
 			maxAutonomousRuns: settings.maxAutonomousRuns,
+			idleContinuationBackoff: settings.idleContinuationBackoff,
 		}) : null;
 		this.maybeReanchor(model);
 		const list = model?.taskTree.filter((n) => n.depth === 0) ?? [];
@@ -674,6 +676,7 @@ export class GoalWidgetComponent implements Component {
 			ledgerEvents: this.getLedgerEvents(),
 			tasksDisabled: settings.disableTasks === true,
 			maxAutonomousRuns: settings.maxAutonomousRuns,
+			idleContinuationBackoff: settings.idleContinuationBackoff,
 		}) : null;
 		this.maybeReanchor(model);
 		const list = model?.taskTree ?? [];

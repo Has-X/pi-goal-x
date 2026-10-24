@@ -262,6 +262,7 @@ export function registerGoalCommands(core: GoalCore): void {
 			? `goal-refresh: re-read caches from disk — ${changes.length} change(s):\n${changes.map((c) => `  - ${c}`).join("\n")}`
 			: "goal-refresh: no changes detected — caches were already current.";
 		ctx.ui.notify(text, "info");
+		core.scheduler.refreshSettings(ctx);
 		core.updateUI(ctx);
 	}
 
@@ -280,6 +281,7 @@ export function registerGoalCommands(core: GoalCore): void {
 		const ledger = readGoalLedger(ctx);
 		const text = buildGoalStatusText({
 			maxAutonomousRuns: loadGoalSettings(ctx.cwd).maxAutonomousRuns,
+			idleContinuationBackoff: loadGoalSettings(ctx.cwd).idleContinuationBackoff,
 			goal: view,
 			focused: view !== null && core.focusedGoalId === view.id,
 			otherOpenGoals: otherCount,
@@ -361,10 +363,11 @@ export function registerGoalCommands(core: GoalCore): void {
 	type SettingRow = {
 		key: keyof GoalSettings | string;
 		label: string;
-		section: "Goal behavior" | "Task tracking" | "Completion auditor" | "Blocker Oracle";
+		section: "Goal behavior" | "Task tracking" | "Completion auditor" | "Blocker Oracle" | "Advanced execution";
 		kind: "boolean" | "modelSelector" | "thinking" | "positiveInteger";
 		/** Settings path for the mutation (defaults to [key]). */
 		path?: string[];
+		help?: string;
 	};
 
 	const SETTING_ROWS: readonly SettingRow[] = [
@@ -377,6 +380,8 @@ export function registerGoalCommands(core: GoalCore): void {
 		{ key: "showAutonomousRuns", label: "show autonomous runs line", section: "Goal behavior", kind: "boolean" },
 		{ key: "stallTimeoutMinutes", label: "stall timeout (minutes)", section: "Goal behavior", kind: "positiveInteger" },
 		{ key: "objectiveMaxChars", label: "max objective length (0 = none)", section: "Goal behavior", kind: "positiveInteger" },
+		{ key: "idleContinuationBackoff", label: "slow repeated idle replies (opt-in)", section: "Advanced execution", kind: "boolean",
+			help: "Slows repeated replies without recognized work. May delay reasoning or custom tools. For a hard stop, set an autonomous run allowance." },
 		{ key: "disableTasks", label: "disableTasks", section: "Task tracking", kind: "boolean" },
 		{ key: "subtaskDepth", label: "subtaskDepth", section: "Task tracking", kind: "positiveInteger" },
 		{ key: "disabled", label: "auditor disabled", section: "Completion auditor", kind: "boolean" },
@@ -393,7 +398,7 @@ export function registerGoalCommands(core: GoalCore): void {
 	];
 
 	function settingsValue(config: GoalSettings, key: keyof GoalSettings | string): string {
-		if (key === "strictExecutionContract" || key === "disabled" || key === "disableTasks" || key === "disableContracts" || key === "autoSelectSingleGoal" || key === "auditorProjectResources" || key === "hideUnfocusedBanner" || key === "hideUnfocusedPrompt" || key === "showAutonomousRuns") {
+		if (key === "idleContinuationBackoff" || key === "strictExecutionContract" || key === "disabled" || key === "disableTasks" || key === "disableContracts" || key === "autoSelectSingleGoal" || key === "auditorProjectResources" || key === "hideUnfocusedBanner" || key === "hideUnfocusedPrompt" || key === "showAutonomousRuns") {
 			return config[key] === true ? "true" : "false";
 		}
 		if (key === "subtaskDepth") return config.subtaskDepth !== undefined ? String(config.subtaskDepth) : "1";
@@ -439,6 +444,7 @@ export function registerGoalCommands(core: GoalCore): void {
 			try {
 				mutateSettingsLayer({ scope, cwd: ctx.cwd, mutation });
 				applyEffectiveSettings();
+				if (mutation.path[0] === "idleContinuationBackoff") core.scheduler.refreshSettings(ctx);
 				return true;
 			} catch (err) {
 				ctx.ui.notify(`Settings change failed: ${err instanceof Error ? err.message : String(err)}`, "warning");
@@ -457,6 +463,7 @@ export function registerGoalCommands(core: GoalCore): void {
 				const localLayer = snapshot[scope].layer as Record<string, unknown>;
 				const options: string[] = [];
 				options.push(`─── Editing: ${scope} (${scopePath(scope)}) ───`);
+				options.push(`Scope: ${scope} (select to switch)`);
 				let lastSection: string | null = null;
 				const pathOf = (row: SettingRow): string[] => row.path ?? [String(row.key)];
 				const valueAtPath = (obj: unknown, path: string[]): unknown => {
@@ -534,7 +541,7 @@ export function registerGoalCommands(core: GoalCore): void {
 					];
 					if (hasLocalOverride) actions.push(inheritLabel);
 					actions.push("Cancel");
-					const action = await ctx.ui.select(`${row.label} (${scope})`, actions);
+					const action = await ctx.ui.select(`${row.label} (${scope})${row.help ? `\n${row.help}` : ""}`, actions);
 					if (!action || action === "Cancel") continue;
 					if (action === inheritLabel) {
 						applyMutation(scope, { op: "unset", path: rowPath });
@@ -552,7 +559,7 @@ export function registerGoalCommands(core: GoalCore): void {
 					const actions = [`Set ${scope} override...`];
 					if (hasLocalOverride) actions.push(inheritLabel);
 					actions.push("Cancel");
-					const action = await ctx.ui.select(`${row.label} (${scope})`, actions);
+					const action = await ctx.ui.select(`${row.label} (${scope})${row.help ? `\n${row.help}` : ""}`, actions);
 					if (!action || action === "Cancel") continue;
 					if (action === inheritLabel) {
 						applyMutation(scope, { op: "unset", path: rowPath });

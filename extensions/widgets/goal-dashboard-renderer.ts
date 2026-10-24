@@ -307,10 +307,10 @@ export function renderCompactDashboard(
 	if (model.status.code === "complete") {
 		lines.push(boxLine(theme, safeWidth, `${success(theme, "✓")} ${success(theme, "All required work is complete.")}`));
 	} else {
-		lines.push(boxLine(theme, safeWidth, statusLine(theme, model)));
+		lines.push(boxLine(theme, safeWidth, model.idlePacing ? fit(model.idlePacing, inner) : statusLine(theme, model)));
 	}
 
-	for (const row of model.scheduling ?? []) lines.push(boxLine(theme, safeWidth, muted(theme, fit(row, inner))));
+	for (const row of model.scheduling ?? []) if (row !== model.idlePacing) lines.push(boxLine(theme, safeWidth, muted(theme, fit(row, inner))));
 
 	// Budget (when configured): fuel gauge + amount, amber until the budget is
 	// exhausted, then soft red.

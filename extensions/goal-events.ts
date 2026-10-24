@@ -1,4 +1,5 @@
 import { cacheGoalHistory } from "./goal-prompt-cache.ts";
+import { registerGoalPromptProfile } from "./goal-prompt-profile.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	GOAL_EVENT_ENTRY,
@@ -62,6 +63,12 @@ export function compactGoalCheckpointContext(
  */
 export function registerGoalEvents(core: GoalCore): void {
 	const { pi } = core;
+	registerGoalPromptProfile(pi, ctx => {
+		const goal = core.state.goal;
+		const scheduler = goal?.scheduler;
+		return goal?.status === "active" && goal.autoContinue && !hasActiveDraft(core)
+			&& (!scheduler || scheduler.owner === ctx.sessionManager.getSessionId());
+	});
 	// Transients are keyed per session: the context hook of session B must never
 	// overwrite the set that session A's provider request will consume.
 	const liveRetention = new LiveTailRetention();
@@ -129,8 +136,11 @@ export function registerGoalEvents(core: GoalCore): void {
 			};
 		}
 		// Track Oracle work attempts; this does not authorize scheduling.
-		if (isMeaningfulProgressToolCall(event.toolName, asRecord(event)?.args)) {
+		if (isMeaningfulProgressToolCall(event.toolName, event.input)) {
 			core.goalWorkToolCalledThisTurn = true;
+			// Goal mutations are measured by content changes at settlement. A
+			// ready declaration or an unchanged task update is only bookkeeping.
+			if (event.toolName !== "update_goal" && event.toolName !== "update_goal_task") core.scheduler.recordWork();
 			// Issue #26: record a meaningful work attempt against armed Oracle
 			// advice. get_goal / echo-only reads are excluded upstream by
 			// isMeaningfulProgressToolCall.
@@ -261,6 +271,8 @@ export function registerGoalEvents(core: GoalCore): void {
 
 	pi.on("session_start", async (event, ctx) => {
 		core.auditMessages.clear();
+		continuationAfterSettleFor = null;
+		networkErrorRecoveryAfterSettleFor = null;
 		// NAF: the zero-op read caches are session-scoped — a new session always
 		// re-reads settings/pool/ledger fresh from disk (cross-process and
 		// hand-edited changes are picked up at the session boundary).
@@ -340,6 +352,8 @@ export function registerGoalEvents(core: GoalCore): void {
 
 	pi.on("session_tree", async (_event, ctx) => {
 		core.auditMessages.clear();
+		continuationAfterSettleFor = null;
+		networkErrorRecoveryAfterSettleFor = null;
 		core.goalService.flushTurn(ctx); // P1-3: persist any buffered transaction before reload
 		await core.loadState(ctx);
 		rehydrateDraft(core, ctx);
@@ -351,7 +365,10 @@ export function registerGoalEvents(core: GoalCore): void {
 	pi.on("before_agent_start", async (event, ctx) => {
 		core.advanceTurnSeq();
   if (!hasActiveDraft(core)) core.installGoalToolProfile(!loadGoalSettings(ctx.cwd).disableTasks);
-		const incomingGoalId = extractGoalIdFromInjectedMessage(event.prompt ?? "");
+		// Pi 1.2+ distinguishes custom triggers from user prompts. Older hosts
+		// expose only prompt, so read the shared public trigger shapes here.
+		const trigger = event as unknown as { prompt?: string; message?: { customType?: string; details?: unknown; content?: unknown } };
+		const incomingGoalId = trigger.message ? goalEventMessageId(trigger.message) : extractGoalIdFromInjectedMessage(trigger.prompt ?? "");
 
 		// If this turn was triggered by a hidden goal checkpoint that no longer
 		// matches the active goal, abort the whole turn instead of letting the
@@ -545,12 +562,21 @@ export function registerGoalEvents(core: GoalCore): void {
 		continuationAfterSettleFor = core.state.goal.id;
 	});
 
-	pi.on("agent_settled", async (_event, ctx) => {
-		core.auditMessages.flush(ctx, pi);
+	pi.on("agent_settled", async (event, ctx) => {
+		if (!core.auditMessages.flush(ctx, pi)) return;
 		const goalId = continuationAfterSettleFor;
 		continuationAfterSettleFor = null;
 		const networkErrorGoalId = networkErrorRecoveryAfterSettleFor;
 		networkErrorRecoveryAfterSettleFor = null;
+		// Current Pi reports startup cancellation even when no assistant message
+		// or live request signal remains. Older hosts omit this field.
+		if ((event as unknown as { aborted?: boolean }).aborted === true) {
+			const abortedGoalId = goalId ?? networkErrorGoalId ?? core.runningGoalId;
+			core.runningGoalId = null;
+			if (abortedGoalId && core.state.goal?.id === abortedGoalId && core.state.goal.status === "active") core.pauseActiveGoal(ctx);
+			core.scheduler.settled(ctx, false);
+			return;
+		}
 		core.scheduler.settled(ctx, !!goalId && core.isActionableContinuationGoal(goalId));
 		if (goalId && core.isActionableContinuationGoal(goalId)) return;
 		if (!networkErrorGoalId || !core.isActionableContinuationGoal(networkErrorGoalId)) return;

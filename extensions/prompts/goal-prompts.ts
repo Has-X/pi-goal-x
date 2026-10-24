@@ -235,7 +235,7 @@ export function goalPromptParts(goal: GoalRecord, settings?: GoalSettings, conte
 	// Scheduling instructions ride with the policy block: they are cleared by
 	// omission, so a retained copy would keep issuing a cancelled order.
 	const fixed = cachedPrompt(goal, settings, "goal", () => buildGoalPrompt(goal, settings));
-	const { runs, instructions } = schedulerSummaryParts(goal.scheduler, settings?.maxAutonomousRuns, settings?.showAutonomousRuns);
+	const { runs, instructions } = schedulerSummaryParts(goal.scheduler, settings?.maxAutonomousRuns, settings?.showAutonomousRuns, settings?.idleContinuationBackoff === true);
 	const limits = `Limits: lifetime tokens=${goal.tokenBudget ?? "none"}; runs=${settings?.maxAutonomousRuns ?? "unlimited"}.`;
 	const state = [fixed, instructions, limits, "Usage spans goal turns, not context. Latest snapshot supersedes earlier snapshots."].filter(Boolean).join("\n");
 	const counters = `Goal snapshot: ${formatUsage(goal)}\n${contextUsageLine(contextUsage)}\n${runs}`;
