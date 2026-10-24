@@ -2,7 +2,7 @@ import { Input, isKittyProtocolActive, matchesKey, parseKey, visibleWidth, wrapT
 import type { Component, TUI, KeyId } from "@earendil-works/pi-tui";
 import type { ExtensionContext, Theme, KeybindingsManager } from "@earendil-works/pi-coding-agent";
 import {
-	GOAL_COMMANDS, GOAL_KEY_ACTIONS, PAUSE_ORDERS, bindingKeys, commandProblems,
+	GOAL_COMMANDS, GOAL_KEY_ACTIONS, PAUSE_ORDERS, bindingKeys, commandPaths, commandProblems,
 	commandRoutes, keybindingProblems, normalizeGoalKey, parseCommandPaths, parseGoalKeybinding, resolveGoalControls, sameGoalKey, valueAtPath,
 	type GoalKeyAction, type GoalKeybinding,
 } from "../goal-controls.ts";
@@ -23,7 +23,7 @@ const rowsFor = (tab: Tab): Row[] => tab === "Commands"
 		: [{ label: "Pause order", path: ["pauseOrder"], help: "Choose what happens on the first and second press of the pause key.", kind: "order", defaults: "together" }];
 
 export function commandControlsFingerprint(commands: GoalSettings["commands"]): string {
-	return JSON.stringify(commandRoutes(commands));
+	return JSON.stringify(GOAL_COMMANDS.map(([id]) => [id, commandPaths(commands, id)]));
 }
 
 /** Bounded, model-free settings UI. The parent owns modal isolation and reload. */
@@ -190,6 +190,7 @@ export class GoalControlsDialog implements Component {
 	}
 	handleInput(data: string): void {
 		if (this.closed || (data.startsWith("\x1b[") && /^[0-9:;]*:[23][u~ABCDHF]$/.test(data.slice(2)))) return;
+		if (this.view === "list") this.selection[this.tabIndex] = Math.max(0, Math.min(this.selection[this.tabIndex]!, this.rows().length - 1));
 		if (this.view === "input") { this.editor.handleInput(data); this.tui.requestRender(); return; }
 		if (this.view === "capture") {
 			if (this.match(data, "cancel")) this.view = "actions";

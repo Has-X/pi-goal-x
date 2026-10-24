@@ -13,7 +13,7 @@ import {
 } from "../extensions/goal-controls.ts";
 import { loadSettingsSnapshot, mutateSettingsLayer, SettingsMutationError, invalidateGoalSettingsCache } from "../extensions/goal-settings.ts";
 import { syncTerminalInputPause } from "../extensions/goal-widget.ts";
-import { GoalControlsDialog } from "../extensions/widgets/goal-controls-dialog.ts";
+import { GoalControlsDialog, commandControlsFingerprint } from "../extensions/widgets/goal-controls-dialog.ts";
 import { createMockTheme, createMockTUI } from "./tui-test-utils.ts";
 import { goalPrompt } from "../extensions/prompts/goal-prompts.ts";
 import { goalDialogControls } from "../extensions/goal-dialog-controls.ts";
@@ -102,6 +102,7 @@ test("routes match whole words, prefer subcommands and preserve objective whites
 	assert.deepEqual(matchCommandRoute(routes, "goal", "editor improvements"), { id: "goal", args: "editor improvements" });
 	assert.equal(matchCommandRoute(routes, "goal-pause", ""), undefined);
 	assert.equal(commandRoutes(undefined).length, GOAL_COMMANDS.length);
+	assert.notEqual(commandControlsFingerprint({ goal: ["goal", "work new"] }), commandControlsFingerprint({ goal: ["work new", "goal"] }), "changing only the preferred alias still needs reload");
 	assert.ok(commandProblems({ goal: ["reload"] }).length);
 	assert.ok(commandProblems({ "goal-tweak": ["goal"] }).length);
 	assert.ok(commandProblems({ goal: ["goal-settings"] }).length);
@@ -411,7 +412,6 @@ test("controls UI records keys, blocks conflicts and supports scoped inheritance
 		h.mutate("project", "set", ["keybindings", "dashboard", "up"], "f8");
 		const filtered = dialog(h);
 		filtered.press(TAB, "F8", DOWN, ENTER, DOWN, DOWN, ENTER, "\x15", "f9", ENTER);
-		filtered.text();
 		filtered.press(ENTER);
 		assert.match(filtered.text(), /Record a replacement key/, "Enter edits the row currently highlighted after filtering");
 	} finally { h.close(); }
