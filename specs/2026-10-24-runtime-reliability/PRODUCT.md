@@ -10,3 +10,5 @@ User update: target Pi 1.4, with peer dependencies requiring at least 1.4 within
 - Recover from temporary Windows rename sharing failures without losing atomic replacement, revision checks, file permissions or cleanup. Bound synchronous delays tightly; ordinary writes and non-Windows failures keep their fast path. Demonstrate eventual success and permanent failure on an actual Windows runner.
 
 Create one reviewed branch and concise PR. Credit the original contributors in GitHub and in the relevant commits for adapted tests, implementation and design contributions. Preserve contributor identity without pretending their PRs were merged unchanged. Leave README scope and unrelated user files alone.
+
+Release update: audit the entire current project for Pi 1.4+ support, confirm the latest published Pi version, then merge #107 and release the next 0.X.0 version. Remove remaining older-host test paths and current documentation claims. Preserve historical release/specification records and compatibility with saved goal data. Keep contributor credits in merged history and release notes.

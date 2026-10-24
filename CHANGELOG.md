@@ -4,6 +4,10 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-10-24
+
+Includes #107.
+
 ### Changed
 
 - Require Pi 1.4 or newer (1.x) and Node 22.19 or newer. Use native prompt preparation and remove older-host compatibility checks.

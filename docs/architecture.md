@@ -326,11 +326,10 @@ npm run check
 ```
 
 `test:unit`, `test:integration`, and `test:all` automatically discover test
-entries and run them in one Node process with small test-only adapters for the
+entries and run them with small test-only adapters for the
 SDK values used by handlers. This avoids loading unrelated model-provider and
 TUI media modules. The fast path requires Node 22.19+; `test:serial` remains
-the slow, real-SDK, process-isolated
-compatibility path. The suites cover: surface baselines (lifecycle-dependent goal tool
+the slow, real-SDK, process-isolated alternative. The suites cover: surface baselines (lifecycle-dependent goal tool
 profile and fourteen commands), golden file/ledger fixtures, stale-continuation behavior,
 GoalService mutation boundary, runtime/accounting, token-budget transitions,
 task-tool consolidation, verification contracts, the independent auditor,
