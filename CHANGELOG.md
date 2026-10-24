@@ -7,7 +7,9 @@ All notable changes to pi-goal-x are documented here.
 ### Fixed
 
 - Skip audit-message settlement callbacks whose Pi context was invalidated by session replacement or reload, preserving replacement-session messages and scheduling intent (#90).
-- Pace repeated default-mode idle executions instead of immediately dispatching another provider request (#100). One execution without observed work continues immediately; subsequent idle continuations wait 30 seconds, doubling up to five minutes. Pacing survives reloads, excludes bookkeeping from progress, and resets after work, goal/task changes, user resume, or producer input. Strict contracts, budgets and dispatch admission retain their existing safeguards.
+- Goal execution requests use the current Pi prompt and tool profile from their first request, including direct creation, draft confirmation, resume and reload. This fixes stale or missing prompt guidance on structured-transcript hosts without changing host internals.
+- Restore immediate continuation by default. Optional `idleContinuationBackoff` slows repeated replies without recognized work, with saved delays, live opt-out and unchanged run accounting (#100). It is off by default and does not guarantee loop termination.
+- Expose the project/global settings scope switch and keep delay timing and resume controls visible in the compact widget.
 
 ## [0.32.3] — 2026-10-02
 

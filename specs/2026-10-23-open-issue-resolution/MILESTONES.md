@@ -70,3 +70,13 @@
   replacement plan, comparative/terminal/real-model results and merge blockers.
 - #90 stays independently accepted. The production opt-in revision is pending;
   the validation result above describes `3551bcc`, not that future revision.
+
+## Final production revision — 2026-10-24
+
+- Retained #90 independently and replaced unconditional pacing with the approved
+  default-off option. Resolved the Pi prompt/profile gate through public APIs.
+- Final suite: 1,145 tests pass. Seven host boundaries through Pi 1.4, real CLI
+  settings/pause/resume, a real-model coding goal and context/runtime gates pass.
+- See `../2026-10-23-continuation-defaults-validation/IMPLEMENTATION.md` for current
+  evidence and limits. #100 remains related rather than auto-closed: unlimited
+  implicit continuation can still loop without optional controls.

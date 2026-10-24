@@ -1,5 +1,9 @@
 # Context, speed and user experience evaluation
 
+This report records the prototype measurements. See
+[IMPLEMENTATION.md](IMPLEMENTATION.md) for the production prompt/profile repair,
+fresh measurements and completed release gates.
+
 2026-10-23. Recommendation: immediate implicit continuation for ordinary work,
 explicit event-driven waits for known dependencies, optional pacing/limits for
 users who choose them. This evaluation supports that tradeoff; it does not prove

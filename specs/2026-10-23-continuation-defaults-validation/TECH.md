@@ -1,5 +1,24 @@
 # Technical plan and experiment protocol
 
+## Production execution — 2026-10-24
+
+Implementation is now authorized. Port the evaluated preference and scheduler
+changes, then harden restoration, live changes, status/accounting and settings UX.
+Promote boundary probes into permanent regressions. Keep all prior comparison
+evidence historical; record fresh production validation separately.
+
+Resolve Pi 1.0 custom-trigger prompt preparation at its public
+`context_with_system` boundary, using `ctx.getSystemPrompt()` for the current host
+prompt and transcript tool declarations for schemas. Restrict repair to goal
+continuations; preserve additional system instructions and caller-owned messages.
+Earlier structured hosts expose full messages through `context`; use that public
+boundary when system messages are present there. Classic hosts without transcript
+helpers remain unchanged. Host capability, rather than a major-version guess,
+determines the route.
+Verify fresh/drafted/resumed/reloaded first requests, tool follow-ups, cache
+prefixes and coexistence with other extensions. Do not patch SDK internals or
+inject a second user/model turn to force preparation.
+
 ## 1. Separate the independent fix
 
 Retain #90's stale-context handling and regressions independently of scheduling
@@ -197,3 +216,16 @@ the profile after a tool response. Verify a supported host/API fix or retain an
 explicit unresolved compatibility gate. Do not monkey-patch private host members,
 silently add a second model request, or hide the first request in the measurements.
 The standalone script is ready for an upstream report; no report has been sent.
+
+## 9. Production result — 2026-10-24
+
+The implementation and permanent regressions now pass the gates above. Pi 0.86
+uses its ordinary full `context` event; newer structured hosts use
+`context_with_system`; classic hosts keep their native path. Pi 1.4's distinct
+custom-trigger event also preserves checkpoint identity and stale-turn handling.
+No SDK source, dependency pin, persisted transcript or user-message provenance
+was changed to prepare the prompt.
+
+[IMPLEMENTATION.md](IMPLEMENTATION.md) records the final sources, checks,
+terminal interaction, real-model result, compatibility coverage and remaining
+product limitations. It supersedes the earlier reports' pending production gates.

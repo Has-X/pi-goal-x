@@ -1,4 +1,4 @@
-                                                                                                              
+
 
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
  Confirm Goal Draft
@@ -6,27 +6,27 @@ Budget: none
 
 ● Goal draft ready for confirmation.
 
-┌─ Draft Details ──────────────────────────────────────────────────────────────────────────────────────────┐  
+┌─ Draft Details ──────────────────────────────────────────────────────────────────────────────────────────┐
 │   Mode: Normal goal
 │   Auto-continue: yes
 
-┌─ Original Topic ─────────────────────────────────────────────────────────────────────────────────────────┐  
+┌─ Original Topic ─────────────────────────────────────────────────────────────────────────────────────────┐
 
 │   Create greeting.txt containing exactly Hello from goal followed by a newline. Verify it and finish
 │   with the completion auditor.
 
-┌─ Proposed Goal ──────────────────────────────────────────────────────────────────────────────────────────┐  
+┌─ Proposed Goal ──────────────────────────────────────────────────────────────────────────────────────────┐
 
 │   Create greeting.txt containing exactly Hello from goal followed by a newline. Verify it and finish
 │   with the completion auditor.
- ● Auditor enabled  (press 'a' to toggle)                                                                     
+ ● Auditor enabled  (press 'a' to toggle)
 
 
 > 1. Confirm — create this goal now ★
   2. Continue chatting — keep refining
   3. Cancel — discard this draft
 
- ↑↓ navigate • Enter select • Esc cancel • a toggle auditor                                                   
+ ↑↓ navigate • Enter select • Esc cancel • a toggle auditor
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ~/projects/pi-goal-x/experiments/runs/continuation-defaults/terminal (codex/fix-open-issues-90-100)
 1.5%/200k                                                                                              fixture

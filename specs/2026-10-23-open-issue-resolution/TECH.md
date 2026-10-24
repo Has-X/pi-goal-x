@@ -1,5 +1,9 @@
 # Implementation plan
 
+> Production implementation, 2026-10-24, supersedes the provisional default
+> pacing below. Preference, restoration, public prompt repair and validation
+> details are in the [production result](../2026-10-23-continuation-defaults-validation/IMPLEMENTATION.md).
+
 > The default pacing design below is provisional after the user's follow-up
 > steering. Use the [continuation defaults plan](../2026-10-23-continuation-defaults-validation/TECH.md)
 > for the opt-in replacement and its release gates. The #90 implementation remains

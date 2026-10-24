@@ -87,7 +87,7 @@ pi.registerTool(defineTool({
   }
   if (params.cursor || params.task_id) return {content: [{type: "text", text: "Use section=objective, tasks, or history for detail retrieval; task_id requires tasks."}], details: goalDetails(view)};
 		if (verbose && !params.section) {
-			const lines: string[] = [`Goal ${view.id}: ${statusLabel(view)}, ${view.sisyphus ? "sisyphus" : "regular"}`, schedulerSummary(view.scheduler, loadGoalSettings(ctx.cwd).maxAutonomousRuns, loadGoalSettings(ctx.cwd).showAutonomousRuns)];
+			const lines: string[] = [`Goal ${view.id}: ${statusLabel(view)}, ${view.sisyphus ? "sisyphus" : "regular"}`, schedulerSummary(view.scheduler, loadGoalSettings(ctx.cwd).maxAutonomousRuns, loadGoalSettings(ctx.cwd).showAutonomousRuns, loadGoalSettings(ctx.cwd).idleContinuationBackoff === true)];
 			lines.push(`Objective: ${view.objective}`, "");
 			lines.push(`Status: ${statusLabel(view)}`);
 			lines.push(`Mode: ${view.sisyphus ? "sisyphus" : "regular"}`);
@@ -130,7 +130,7 @@ pi.registerTool(defineTool({
 		}
 
 		// Compact state read; full requirements remain available through detail pages.
-		const lines: string[] = [`Goal ${view.id}: ${statusLabel(view)}, ${view.sisyphus ? "sisyphus" : "regular"}`, schedulerSummary(view.scheduler, loadGoalSettings(ctx.cwd).maxAutonomousRuns, loadGoalSettings(ctx.cwd).showAutonomousRuns)];
+		const lines: string[] = [`Goal ${view.id}: ${statusLabel(view)}, ${view.sisyphus ? "sisyphus" : "regular"}`, schedulerSummary(view.scheduler, loadGoalSettings(ctx.cwd).maxAutonomousRuns, loadGoalSettings(ctx.cwd).showAutonomousRuns, loadGoalSettings(ctx.cwd).idleContinuationBackoff === true)];
 		lines.push(`Objective: ${truncateText(view.objective, 180)}${view.objective.length > 180 ? " (full: get_goal section=objective)" : ""}`);
 		if (view.taskList) {
 			const { findCurrentTask, firstPendingTask } = conciseTaskPointers(view);

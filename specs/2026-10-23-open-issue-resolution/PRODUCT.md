@@ -1,5 +1,10 @@
 # Open issue assessment and resolution
 
+> Final disposition, 2026-10-24: the independent #90 fix is retained. The pacing
+> proposal below is historical; the approved implementation keeps immediate
+> defaults and makes pacing opt-in. #100 remains open. See the
+> [production result](../2026-10-23-continuation-defaults-validation/IMPLEMENTATION.md).
+
 > Follow-up product steering, 2026-10-23: the user confirmed that the standard
 > workflow is `/goal`, prompt useful continuation, and ordinary pause/resume.
 > Background orchestration and extra cost controls are optional. The default

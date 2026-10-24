@@ -13,6 +13,8 @@ import {Type} from '@earendil-works/pi-ai';
 import {output,roots,repository,prepare} from './prepare.mjs';
 
 prepare();
+const production=process.argv.includes('--production');
+if(production)fs.cpSync(path.join(repository,'extensions'),path.join(roots.candidate,'extensions'),{recursive:true});
 const diagnosePrefix=process.argv.includes('--diagnose-prefix');
 const evidence=path.join(repository,'specs/2026-10-23-continuation-defaults-validation/evidence');
 fs.mkdirSync(evidence,{recursive:true});
@@ -139,8 +141,12 @@ for(const scenario of ['reasoning','custom','idle','busy-poll'])for(const policy
 await run('candidate','idle',{optIn:true});await run('candidate','idle',{cap:4});await run('candidate','wait');
 for(const guard of ['one-additional','eight-additional'])for(const scenario of ['reasoning','idle'])await run('candidate',scenario,{guard});
 const record={environment:{node:process.version,platform:process.platform,arch:process.arch,cpu:os.cpus()[0]?.model,sdk:'1.0.0'},
+ candidateSource:production?'working production extensions':'isolated opt-in prototype',
  method:'offline SDK + localhost scripted provider; byte/framing observations, not billed tokens or live cache hits; guard cases are counterfactual harness policies, not Codex or Claude runs',
  profiles,results};
-fs.writeFileSync(path.join(output,'efficiency-results.json'),JSON.stringify(record,null,2)+'\n');
-fs.writeFileSync(path.join(evidence,'efficiency-results.json'),JSON.stringify(record,null,2)+'\n');
-console.log(JSON.stringify({contexts:Object.keys(profiles).length*profiles.original.context.rows.length,scenarios:results.length,evidence:path.join(evidence,'efficiency-results.json')}));
+if(production)for(const r of results.filter(r=>r.policy==='candidate'))assert.equal(r.prefixVariants,1,`${r.id}: execution prefix changes`);
+const file=production?'production-efficiency-results.json':'efficiency-results.json';
+fs.writeFileSync(path.join(output,file),JSON.stringify(record,null,2)+'\n');
+const destination=production?path.join(evidence,'production','efficiency.json'):path.join(evidence,file);
+fs.mkdirSync(path.dirname(destination),{recursive:true});fs.writeFileSync(destination,JSON.stringify(record,null,2)+'\n');
+console.log(JSON.stringify({contexts:Object.keys(profiles).length*profiles.original.context.rows.length,scenarios:results.length,evidence:destination}));

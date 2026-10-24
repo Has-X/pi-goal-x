@@ -111,6 +111,8 @@ export interface GoalSettingsResolvedShape {
 	 */
 	showAutonomousRuns?: boolean;
 	strictExecutionContract?: boolean;
+	/** Delay repeated executions without recognized work (off by default). */
+	idleContinuationBackoff?: boolean;
 	/**
 	 * Maximum objective length in characters (0/unset = no limit, the
 	 * default; >0 caps objectives in create_goal, propose_goal_draft, and
@@ -342,6 +344,7 @@ const ALLOWED_SETTINGS_KEYS = new Set([
 	"stallTimeoutMinutes",
 	"maxAutonomousRuns",
 	"strictExecutionContract",
+	"idleContinuationBackoff",
 	"objectiveMaxChars",
 	"keybindings",
 	"hideUnfocusedBanner",
@@ -394,6 +397,7 @@ export function parseSettingsLayer(
 
 	for (const [key, value] of Object.entries(record)) {
 		switch (key) {
+			case "idleContinuationBackoff":
 			case "strictExecutionContract":
 			case "disableTasks":
 			case "disableContracts":
@@ -822,6 +826,7 @@ function resolvedSettingsSnapshot(cwd: string, env: NodeJS.ProcessEnv): Settings
 		globalValue: global.layer.oracle?.maxFailedAttemptsPerBlocker,
 		defaultValue: 2,
 	}));
+	const idleContinuationBackoff = track("idleContinuationBackoff", resolveLeaf<boolean>({projectValue: project.layer.idleContinuationBackoff, globalValue: global.layer.idleContinuationBackoff, defaultValue: false}));
 	const strictExecutionContract = track("strictExecutionContract", resolveLeaf<boolean>({
 		projectValue: project.layer.strictExecutionContract,
 		globalValue: global.layer.strictExecutionContract,
@@ -895,6 +900,7 @@ function resolvedSettingsSnapshot(cwd: string, env: NodeJS.ProcessEnv): Settings
 		goalsRoot,
 		stallTimeoutMinutes,
 		maxAutonomousRuns,
+		idleContinuationBackoff,
 		strictExecutionContract,
 		objectiveMaxChars,
 		keybindings,
@@ -1248,6 +1254,7 @@ function buildPersistedLayer(settings: GoalSettings): Record<string, unknown> {
 		if (so.maxFailedAttemptsPerBlocker !== undefined) o.maxFailedAttemptsPerBlocker = so.maxFailedAttemptsPerBlocker;
 		if (Object.keys(o).length > 0) persisted.oracle = o;
 	}
+	if (settings.idleContinuationBackoff !== undefined) persisted.idleContinuationBackoff = settings.idleContinuationBackoff;
 	if (settings.strictExecutionContract !== undefined) persisted.strictExecutionContract = settings.strictExecutionContract;
 	if (settings.maxAutonomousRuns !== undefined) persisted.maxAutonomousRuns = settings.maxAutonomousRuns;
 	if (settings.stallTimeoutMinutes !== undefined) persisted.stallTimeoutMinutes = settings.stallTimeoutMinutes;
@@ -1297,6 +1304,7 @@ export function effectiveSettingsReport(cwd: string, env: NodeJS.ProcessEnv = pr
 		{ key: "showAutonomousRuns", label: "show autonomous runs line", format: () => String(snapshot.value.showAutonomousRuns) },
 		{ key: "goalsRoot", label: "goals root (reload to change)", format: () => snapshot.value.goalsRoot ?? ".pi/goals" },
 		{ key: "hideUnfocusedPrompt", label: "hide unfocused prompt", format: () => String(snapshot.value.hideUnfocusedPrompt) },
+		{ key: "idleContinuationBackoff", label: "slow repeated idle replies (opt-in)", format: () => String(snapshot.value.idleContinuationBackoff) },
 		{ key: "strictExecutionContract", label: "explicit execution contracts (opt-in)", format: () => String(snapshot.value.strictExecutionContract) },
 		{ key: "maxAutonomousRuns", label: "autonomous run allowance", format: () => snapshot.value.maxAutonomousRuns === 0 ? "0 (disabled)" : String(snapshot.value.maxAutonomousRuns ?? "unlimited (default)") },
 		{ key: "stallTimeoutMinutes", label: "stall timeout (minutes)", format: () => String(snapshot.value.stallTimeoutMinutes) },

@@ -16,6 +16,7 @@ export class GoalScheduler {
 	private runGoalId: string | undefined;
 	private runGoalContent: string | undefined;
 	private runHadWork = false;
+	private runPacingEnabled = false;
 	private denied = false;
 	private unsubscribe: (() => void) | undefined;
 	private core: GoalCore;
@@ -197,7 +198,7 @@ export class GoalScheduler {
 			this.declared = true;
 			this.core.runtime.markTurnStopped(goal.id);
 			const wait = goal.scheduler?.wait;
-			return { content: [{ type: "text", text: `Scheduling decision saved. Stop this execution.\n${schedulerSummary(goal.scheduler, this.limit(ctx), loadGoalSettings(ctx.cwd).showAutonomousRuns)}${wait ? `\nWake token: ${wait.token}. Register this token with the producer before completion; adapters must retain early results.` : ""}` }], details: { goal, ...(wait ? { wait_id: wait.id, waitToken: wait.token } : {}) }, terminate: true };
+			return { content: [{ type: "text", text: `Scheduling decision saved. Stop this execution.\n${schedulerSummary(goal.scheduler, this.limit(ctx), loadGoalSettings(ctx.cwd).showAutonomousRuns, loadGoalSettings(ctx.cwd).idleContinuationBackoff === true)}${wait ? `\nWake token: ${wait.token}. Register this token with the producer before completion; adapters must retain early results.` : ""}` }], details: { goal, ...(wait ? { wait_id: wait.id, waitToken: wait.token } : {}) }, terminate: true };
 		} catch (error) { return { content: [{ type: "text", text: `Scheduling decision NOT saved: ${error instanceof Error ? error.message : String(error)}` }], details: { error: true }, terminate: false }; }
 	}
 
@@ -207,13 +208,14 @@ export class GoalScheduler {
 		if (this.inRun) { this.core.runningGoalId = this.core.state.goal?.id ?? null; return; }
 		this.inRun = true; this.declared = false; this.denied = false;
 		this.runGoalId = this.core.state.goal?.id;
-		this.runGoalContent = this.goalContent(this.core.state.goal);
+		this.runPacingEnabled = loadGoalSettings(ctx.cwd).idleContinuationBackoff === true;
+		this.runGoalContent = this.runPacingEnabled ? this.goalContent(this.core.state.goal) : undefined;
 		this.runHadWork = false;
 		this.cancelTimer(); this.core.runtime.clearContinuationTimer();
 		this.core.runningGoalId = this.core.state.goal?.id ?? null;
 	}
 	/** Work in any tool turn counts until the entire logical execution settles. */
-	recordWork(): void { if (this.inRun) this.runHadWork = true; }
+	recordWork(): void { if (this.inRun && this.runPacingEnabled) this.runHadWork = true; }
 	turn(ctx: ExtensionContext): void {
 		if (!this.declared) return;
 		this.declared = false;
@@ -267,7 +269,7 @@ export class GoalScheduler {
 				if (strict || (s.decision.kind === "ready" && s.decision.purpose !== "ready")) { this.schedule(ctx); return; }
 			}
 			if (!strict) {
-				this.update(ctx, (state, current) => { this.implicitReady(state); this.paceIdle(state, current); });
+				this.update(ctx, (state, current) => { this.implicitReady(state); if (loadGoalSettings(ctx.cwd).idleContinuationBackoff && this.runPacingEnabled) this.paceIdle(state, current); else state.idle = undefined; });
 				this.schedule(ctx); return;
 			}
 			if (s.repairUsed || !this.available(ctx, s)) {
@@ -297,6 +299,19 @@ export class GoalScheduler {
 			if (!this.inRun) this.schedule(ctx);
 		});
 	}
+	/** Apply an explicit preference edit without renewing runs or lifecycle state. */
+	refreshSettings(ctx: ExtensionContext): void {
+		invalidateGoalSettingsCache();
+		if (this.inRun && !loadGoalSettings(ctx.cwd).idleContinuationBackoff) {
+			this.runPacingEnabled = false;
+			const s = this.core.state.goal?.scheduler;
+			if (s?.idle && s.owner === this.owner(ctx)) this.safe(ctx, () => this.update(ctx, state => { state.idle = undefined; }));
+		}
+		this.schedule(ctx);
+		// Keep the explicit refresh snapshot warm so the next /goal-refresh can
+		// distinguish an external edit from the state just shown to the user.
+		loadGoalSettings(ctx.cwd);
+	}
 	schedule(ctx: ExtensionContext): void {
 		if (this.inRun) return;
 		invalidateGoalSettingsCache();
@@ -305,6 +320,7 @@ export class GoalScheduler {
 			const g = this.core.state.goal;
 			if (!g || g.status !== "active" || !g.autoContinue || !g.scheduler) return;
 			let s = this.state(ctx, g);
+			if (!loadGoalSettings(ctx.cwd).idleContinuationBackoff && s.idle) s = this.update(ctx, state => { state.idle = undefined; }).scheduler!;
 			if (s.phase === "ready" && s.decision?.kind === "ready" && s.decision.purpose === "repair" && !this.strict(ctx, s)) {
 				s = this.update(ctx, state => this.implicitReady(state)).scheduler!;
 			}
@@ -346,6 +362,7 @@ export class GoalScheduler {
 				if (g.status !== "active" || !g.autoContinue || budgetReached(g) || !this.available(ctx, s)) throw new Error(this.allowanceReason(ctx));
 				if (s.wait && Date.now() >= s.wait.deadline) throw new Error("Wait deadline reached.");
 				if (s.phase === "ready" && s.decision?.kind === "ready" && s.decision.purpose === "repair" && !this.strict(ctx, s)) this.implicitReady(s);
+				if (!loadGoalSettings(ctx.cwd).idleContinuationBackoff) s.idle = undefined;
 				if (this.idleDelay(s) > 0) { deferred = true; return; }
 				let kind = s.phase === "ready" && s.decision?.kind === "ready" ? s.decision.purpose : undefined;
 				if (s.phase === "waiting" && s.wait) {
@@ -373,7 +390,7 @@ export class GoalScheduler {
 	}
 	isWaiting(): boolean {
 		const s = this.core.state.goal?.scheduler;
-		return !this.inRun && !!s && (s.phase === "waiting" || this.idleDelay(s) > 0);
+		return !this.inRun && !!s && (s.phase === "waiting" || (!!this.ctx && loadGoalSettings(this.ctx.cwd).idleContinuationBackoff === true && this.idleDelay(s) > 0));
 	}
 	isDenied(): boolean { return this.denied; }
 }

@@ -249,15 +249,22 @@ token/time intervals per turn; a goal never double-charges the same interval.
 `GoalRuntime` (goal-runtime.ts) owns continuation scheduling, the stale
 checkpoint state, the turn-stop guard, and one-shot steering reminders.
 
-`GoalScheduler` persists dispatch intent and allowance consumption. In default
-mode it also persists a bounded idle streak and the earliest next continuation
-time. One execution without observed work continues immediately; further idle
-executions use a 30-second exponential delay capped at five minutes. Work
-attempts accumulate across all turns in the logical run, while content snapshots
-detect goal/task changes without treating usage, revisions or scheduler writes
-as progress. The delay is checked again at dispatch admission. Resume and genuine
-host input reset pacing; strict contracts and provider recovery retain their
-separate scheduling paths.
+`GoalScheduler` persists dispatch intent and allowance consumption. Default
+continuation is immediate. Explicit `idleContinuationBackoff=true` also records a
+bounded idle streak and earliest next attempt: one immediate continuation, then
+30 seconds doubling to five minutes. Work accumulates over the whole logical run;
+content snapshots exclude usage, revisions and scheduler writes. Disabled pacing
+skips those snapshots. Settings are rechecked at scheduling and admission; opting
+out removes saved delay metadata without renewing consumption. Resume and genuine
+host input reset pacing; strict waits and provider recovery remain independent.
+
+On structured-transcript Pi hosts, `goal-prompt-profile.ts` projects the current
+public host prompt and resolved tool declarations into goal execution requests.
+This repairs custom-triggered first requests after direct creation, drafting,
+resume and reload, before the first tool response. It uses `context_with_system`
+where available and the full ordinary `context` event on earlier structured
+hosts. Classic hosts keep their native path. Projection is request-local: host
+history, tool/result pairs and additional extension instructions are retained.
 
 Audit display messages flush only at idle settlement and remain scoped to their
 session. If Pi has invalidated a settlement context, the handler skips it before

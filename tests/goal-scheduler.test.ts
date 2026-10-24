@@ -11,13 +11,13 @@ import { writeActiveGoalFile, parseGoalFile } from "../extensions/storage/goal-f
 import { invalidateGoalSettingsCache, parseGoalSettings, saveGoalSettingsFileConfig, loadGoalSettings } from "../extensions/goal-settings.ts";
 import { newGoalScheduler, normalizeGoalScheduler, schedulerSummary } from "../extensions/goal-scheduler-state.ts";
 
-async function fixture(t: TestContext, limit?: number, owner = "owner", existing?: string, strict = true) {
+async function fixture(t: TestContext, limit?: number, owner = "owner", existing?: string, strict = true, idleBackoff = false) {
 	const cwd = existing ?? mkdtempSync(path.join(tmpdir(), "goal-scheduler-"));
 	const prior = process.env.PI_GOAL_GLOBAL_SETTINGS_FILE;
 	process.env.PI_GOAL_GLOBAL_SETTINGS_FILE = path.join(cwd, "absent-global.json");
 	if (!existing) {
 		mkdirSync(path.join(cwd, ".pi"), { recursive: true });
-		writeFileSync(path.join(cwd, ".pi", "pi-goal-x-settings.json"), JSON.stringify({ strictExecutionContract: strict, ...(limit !== undefined ? { maxAutonomousRuns: limit } : {}) }));
+		writeFileSync(path.join(cwd, ".pi", "pi-goal-x-settings.json"), JSON.stringify({ strictExecutionContract: strict, ...(idleBackoff ? { idleContinuationBackoff: true } : {}), ...(limit !== undefined ? { maxAutonomousRuns: limit } : {}) }));
 	}
 	invalidateGoalSettingsCache();
 	const goal = createGoal({ objective: "Test explicit scheduling", autoContinue: true, sisyphus: false });
@@ -389,8 +389,79 @@ test("implicit executions continue without tools through task completion and wra
  assert.ok(h.core.state.goal?.taskList?.tasks.every(task => task.status === "complete"));
 });
 
-test("repeated idle executions back off durably, cap at five minutes and spend only on delivery", async t => {
+test("default continuation does not inspect goal content or delay reasoning/custom tools", async t => {
 	const h = await fixture(t, undefined, "owner", undefined, false);
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+	(h.core.scheduler as unknown as { goalContent: () => never }).goalContent = () => { throw new Error("Default must skip pacing snapshots"); };
+	h.begin();
+	for (let i = 0; i < 12; i++) {
+		if (i % 2) await h.handlers.tool_call!({ toolName: "publish_report", input: { stage: i } }, h.ctx);
+		h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1);
+		assert.equal(h.sent.length, i + 1);
+		assert.equal(h.core.state.goal?.scheduler?.idle, undefined);
+		h.admit();
+	}
+});
+
+test("old saved delays without explicit opt-in are ignored on restore and in status", async t => {
+	const h = await fixture(t, undefined, "owner", undefined, false);
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+	h.core.goalService.apply(h.ctx, { mutate: g => ({ ...g, scheduler: { ...newGoalScheduler("owner"), used: 7, phase: "ready", decision: { kind: "ready", purpose: "ready" }, idle: { runs: 4, nextAt: Date.now() + 120000 } } }) });
+	assert.doesNotMatch(schedulerSummary(h.core.state.goal?.scheduler), /Next automatic|delay off/);
+	assert.equal(h.core.scheduler.isWaiting(), false);
+	h.core.scheduler.restore(h.ctx); t.mock.timers.tick(1);
+	assert.equal(h.sent.length, 1);
+	assert.equal(h.core.state.goal?.scheduler?.used, 8);
+	assert.equal(h.core.state.goal?.scheduler?.idle, undefined);
+});
+
+test("disabling a pending delay dispatches promptly without renewing spent allowance", async t => {
+	const h = await fixture(t, 20, "owner", undefined, false, true);
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+	h.begin(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit(); h.core.scheduler.settled(h.ctx);
+	assert.equal(h.core.scheduler.isWaiting(), true);
+	saveGoalSettingsFileConfig(h.cwd, { idleContinuationBackoff: false, maxAutonomousRuns: 20 });
+	h.core.scheduler.refreshSettings(h.ctx); t.mock.timers.tick(1);
+	assert.equal(h.sent.length, 2);
+	assert.equal(h.core.state.goal?.scheduler?.used, 2);
+	assert.equal(h.core.state.goal?.scheduler?.idle, undefined);
+	h.admit();
+	t.mock.timers.tick(30000);
+	assert.equal(h.sent.length, 2, "obsolete idle timer cannot spend twice");
+});
+
+test("enabling during work and off/on edits do not retroactively classify an execution", async t => {
+	const h = await fixture(t, undefined, "owner", undefined, false);
+	const idle = () => h.core.state.goal?.scheduler?.idle;
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+	h.begin();
+	saveGoalSettingsFileConfig(h.cwd, { idleContinuationBackoff: true });
+	h.core.scheduler.refreshSettings(h.ctx);
+	h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
+	assert.equal(idle(), undefined);
+	h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
+	assert.equal(idle()?.runs, 1);
+	saveGoalSettingsFileConfig(h.cwd, { idleContinuationBackoff: false }); h.core.scheduler.refreshSettings(h.ctx);
+	saveGoalSettingsFileConfig(h.cwd, { idleContinuationBackoff: true }); h.core.scheduler.refreshSettings(h.ctx);
+	h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1);
+	assert.equal(h.sent.length, 3);
+	assert.equal(idle(), undefined);
+});
+
+test("claim drops a saved delay if the preference was disabled after scheduling", async t => {
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+	h.begin(); h.core.scheduler.settled(h.ctx);
+	h.core.goalService.apply(h.ctx, { mutate: g => ({ ...g, scheduler: { ...g.scheduler!, used: 3, idle: { runs: 2, nextAt: Date.now() + 30000 } } }) });
+	saveGoalSettingsFileConfig(h.cwd, { idleContinuationBackoff: false });
+	t.mock.timers.tick(1);
+	assert.equal(h.sent.length, 1);
+	assert.equal(h.core.state.goal?.scheduler?.used, 4);
+	assert.equal(h.core.state.goal?.scheduler?.idle, undefined);
+});
+
+test("repeated opted-in idle executions back off durably, cap at five minutes and spend only on delivery", async t => {
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin();
 	for (const [index, delay] of [0, 30_000, 60_000, 120_000, 240_000, 300_000, 300_000].entries()) {
@@ -398,7 +469,7 @@ test("repeated idle executions back off durably, cap at five minutes and spend o
 		assert.equal(h.core.state.goal?.status, "active");
 		assert.equal(h.core.state.goal?.scheduler?.used, index);
 		if (delay) {
-			assert.match(schedulerSummary(h.core.state.goal?.scheduler), /Idle continuation.*next check/i);
+			assert.match(schedulerSummary(h.core.state.goal?.scheduler, undefined, true, true), /Next automatic attempt in .*s/);
 			const disk = parseGoalFile(path.resolve(h.cwd, h.core.state.goal!.activePath!));
 			assert.deepEqual(disk?.scheduler, h.core.state.goal?.scheduler, "pacing is saved before waiting");
 			h.core.scheduler.schedule(h.ctx);
@@ -413,7 +484,7 @@ test("repeated idle executions back off durably, cap at five minutes and spend o
 });
 
 test("work in an earlier tool turn resets idle pacing for the entire logical run", async t => {
-	const h = await fixture(t, undefined, "owner", undefined, false);
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
 	await h.handlers.turn_start!({}, h.ctx);
@@ -434,7 +505,7 @@ for (const [toolName, input] of [
 	["bash", { command: "echo 'Standing by'" }], ["bg_wait", { id: "running-job" }],
 	["subagent", { action: "status", id: "running-job" }],
 ] as const) test(`inspection-only ${toolName} does not erase idle pacing`, async t => {
-	const h = await fixture(t, undefined, "owner", undefined, false);
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
 	await h.handlers.tool_call!({ toolName, input }, h.ctx);
@@ -447,7 +518,7 @@ for (const [toolName, input] of [
 });
 
 test("optional default ready decisions do not bypass repeated-idle pacing", async t => {
-	const h = await fixture(t, undefined, "owner", undefined, false);
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin(); h.ready(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
 	h.ready(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(29_999);
@@ -457,7 +528,7 @@ test("optional default ready decisions do not bypass repeated-idle pacing", asyn
 });
 
 test("restoring a paced goal preserves its deadline; explicit resume clears it", async t => {
-	const h = await fixture(t, undefined, "owner", undefined, false);
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
 	h.core.scheduler.settled(h.ctx);
@@ -477,7 +548,7 @@ test("restoring a paced goal preserves its deadline; explicit resume clears it",
 });
 
 test("producer messages take over idle pacing without renewing allowance", async t => {
-	const h = await fixture(t, 10, "owner", undefined, false);
+	const h = await fixture(t, 10, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
 	h.core.scheduler.settled(h.ctx);
@@ -490,7 +561,7 @@ test("producer messages take over idle pacing without renewing allowance", async
 });
 
 test("claim rechecks a newly postponed idle deadline before spending allowance", async t => {
-	const h = await fixture(t, undefined, "owner", undefined, false);
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin(); h.core.scheduler.settled(h.ctx);
 	// Runtime has a queued ready callback, but the authoritative record changes
@@ -506,7 +577,7 @@ test("claim rechecks a newly postponed idle deadline before spending allowance",
 });
 
 test("idle pacing excludes waiting time from accounting and respects changed run limits", async t => {
-	const h = await fixture(t, undefined, "owner", undefined, false);
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
 	h.core.scheduler.settled(h.ctx);
@@ -522,7 +593,7 @@ test("idle pacing excludes waiting time from accounting and respects changed run
 });
 
 for (const action of ["pause", "unfocus", "replace", "shutdown"] as const) test(`${action} invalidates an idle continuation`, async t => {
-	const h = await fixture(t, undefined, "owner", undefined, false);
+	const h = await fixture(t, undefined, "owner", undefined, false, true);
 	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	h.begin(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1); h.admit();
 	h.core.scheduler.settled(h.ctx);

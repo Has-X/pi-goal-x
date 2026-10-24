@@ -21,7 +21,7 @@ export interface GoalSchedulerState {
 	wait?: GoalWait;
 	dispatch?: { id: string; kind: GoalDispatchKind; claimedAt: number };
 	repairUsed: boolean;
-	/** Default-mode idle pacing, independent of the explicit wait protocol. */
+	/** Optional idle pacing, effective only with idleContinuationBackoff=true. */
 	idle?: { runs: number; nextAt: number };
 }
 export type GoalContinuation =
@@ -68,16 +68,20 @@ export function normalizeGoalScheduler(raw: unknown): GoalSchedulerState | undef
  * omission, so a retained stale copy would keep issuing a cancelled order:
  * they belong with the reset-on-change state, never with retained counters.
  */
-export function schedulerSummaryParts(s: GoalSchedulerState | undefined, limit?: number, showRuns = true): { runs: string; instructions: string } {
+export function schedulerSummaryParts(s: GoalSchedulerState | undefined, limit?: number, showRuns = true, idleBackoff = false): { runs: string; instructions: string; idlePacing?: string } {
 	// An unlimited allowance has no limit to report, so the runs line is left
 	// empty rather than rendered as "used/unlimited". A finite allowance is
 	// reported unless showAutonomousRuns is off. Enforcement reads the limit
 	// elsewhere; this is display only.
 	const runs = limit !== undefined && showRuns ? `Autonomous runs: ${s?.used ?? 0}/${limit}${limit === 0 ? " (automatic continuation disabled)" : ""}.` : "";
 	const lines: string[] = [];
+	let idlePacing: string | undefined;
 	if (s) {
-		if (s.phase === "ready" && s.decision?.kind === "ready" && s.decision.purpose === "ready" && s.idle && s.idle.nextAt > Date.now()) {
-			lines.push(`Idle continuation paced; next check: ${new Date(s.idle.nextAt).toISOString()}.`);
+		if (idleBackoff && s.phase === "ready" && s.decision?.kind === "ready" && s.decision.purpose === "ready" && s.idle && s.idle.nextAt > Date.now()) {
+			const seconds = Math.ceil((s.idle.nextAt - Date.now()) / 1000);
+			const time = new Date(s.idle.nextAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+			idlePacing = `Next automatic attempt in ${seconds}s (${time} local). /goal-resume now.`;
+			lines.push(idlePacing);
 		}
 		if (s.wait) {
 			lines.push(`Waiting: ${s.wait.reason}; wait_id=${s.wait.id}; deadline=${new Date(s.wait.deadline).toISOString()}.`);
@@ -85,10 +89,10 @@ export function schedulerSummaryParts(s: GoalSchedulerState | undefined, limit?:
 		}
 		if (s.phase === "interrupted" || s.phase === "claimed") lines.push("Execution requires dispatch admission or explicit /goal-resume after interruption.");
 	}
-	return { runs, instructions: lines.join("\n") };
+	return { runs, instructions: lines.join("\n"), idlePacing };
 }
 
-export function schedulerSummary(s: GoalSchedulerState | undefined, limit?: number, showRuns = true): string {
-	const { runs, instructions } = schedulerSummaryParts(s, limit, showRuns);
+export function schedulerSummary(s: GoalSchedulerState | undefined, limit?: number, showRuns = true, idleBackoff = false): string {
+	const { runs, instructions } = schedulerSummaryParts(s, limit, showRuns, idleBackoff);
 	return [runs, instructions].filter(Boolean).join("\n");
 }

@@ -1,5 +1,8 @@
 # Continuation default evaluation — 2026-10-23
 
+This report records the prototype evaluation. The approved production changes
+and fresh release evidence are in [IMPLEMENTATION.md](IMPLEMENTATION.md).
+
 ## Decision
 
 Preserve immediate implicit continuation for the standard user. Offer the existing

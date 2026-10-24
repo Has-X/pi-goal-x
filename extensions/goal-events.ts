@@ -1,4 +1,5 @@
 import { cacheGoalHistory } from "./goal-prompt-cache.ts";
+import { registerGoalPromptProfile } from "./goal-prompt-profile.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	GOAL_EVENT_ENTRY,
@@ -62,6 +63,12 @@ export function compactGoalCheckpointContext(
  */
 export function registerGoalEvents(core: GoalCore): void {
 	const { pi } = core;
+	registerGoalPromptProfile(pi, ctx => {
+		const goal = core.state.goal;
+		const scheduler = goal?.scheduler;
+		return goal?.status === "active" && goal.autoContinue && !hasActiveDraft(core)
+			&& (!scheduler || scheduler.owner === ctx.sessionManager.getSessionId());
+	});
 	// Transients are keyed per session: the context hook of session B must never
 	// overwrite the set that session A's provider request will consume.
 	const liveRetention = new LiveTailRetention();
@@ -358,7 +365,10 @@ export function registerGoalEvents(core: GoalCore): void {
 	pi.on("before_agent_start", async (event, ctx) => {
 		core.advanceTurnSeq();
   if (!hasActiveDraft(core)) core.installGoalToolProfile(!loadGoalSettings(ctx.cwd).disableTasks);
-		const incomingGoalId = extractGoalIdFromInjectedMessage(event.prompt ?? "");
+		// Pi 1.4 distinguishes custom triggers from user prompts. Older hosts
+		// expose only prompt, so read the shared public trigger shapes here.
+		const trigger = event as unknown as { prompt?: string; message?: { customType?: string; details?: unknown; content?: unknown } };
+		const incomingGoalId = trigger.message ? goalEventMessageId(trigger.message) : extractGoalIdFromInjectedMessage(trigger.prompt ?? "");
 
 		// If this turn was triggered by a hidden goal checkpoint that no longer
 		// matches the active goal, abort the whole turn instead of letting the

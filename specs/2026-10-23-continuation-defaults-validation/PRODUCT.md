@@ -70,10 +70,19 @@ supported host path or upstream fix. Retain the reproduction and compatibility
 limitation; do not patch private host state. Neither a passing fixed-state context
 gate nor an unchanged tool schema proves that a live system prefix stayed identical.
 
-This work validates the plan before a production redesign. Prototype code belongs
-in the evaluation area or isolated scratch copies. Keep #90 independently
-reviewable. The existing implementation's passing tests demonstrate conformance
-to its timing policy, rather than proving that policy is the right default.
+The comparative evaluation is complete. On 2026-10-24 the user authorized full
+production implementation, including the Pi 1.0 prompt/profile resolution and
+fresh end-to-end standard-user tests. Port the validated default-off behavior,
+finish preference/persistence/UI edge cases, and retain #90 independently.
+Historical evaluation evidence describes the prototype; release evidence must
+exercise the resulting production sources.
+
+Use the documented Pi 1.0 `context_with_system` boundary to align goal continuation
+requests with the host's current effective prompt and declared tools. Preserve
+other extensions' additional instructions, tool/result pairing, explicit cache
+markers, host history and old-host behavior. No private SDK state, extra inference
+or synthetic user authorization is permitted. Test the first request after direct
+creation, drafting, resume and reload, as well as the first tool follow-up.
 
 ## Desired default
 
@@ -211,3 +220,16 @@ The recommended default still allows an executor that repeatedly chooses no acti
 to consume unbounded runs when the user has selected no limits. Be explicit about
 that retained tradeoff. Do not claim that an opt-in feature eliminates the reported
 #100 loop for every default user or close the issue on that basis.
+
+## Implementation result — 2026-10-24
+
+The approved default and opt-in behavior are implemented. The public request
+projection resolves the Pi prompt/profile gate; direct creation, confirmation,
+resume and reload have permanent SDK coverage. Supported-host checks include the
+reported Pi 1.4 environment. The settings scope selector, live opt-out and compact
+delay display were exercised through the actual terminal.
+
+See [production implementation and validation](IMPLEMENTATION.md) for current
+release evidence. Earlier prototype reports remain historical. The default-loop
+tradeoff above remains explicit; producer integration and a bounded stall policy
+remain separate decisions.

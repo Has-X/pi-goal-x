@@ -120,3 +120,82 @@
   evidence/cardinality/measurement-budget assertions and the unchanged 24-fixture
   context gate. No production source, dependency, root README or unrelated spec
   changed. The supported-host prompt/profile resolution remains an explicit gate.
+
+## Production implementation — 2026-10-24
+
+- User authorized the complete implementation, Pi prompt/profile resolution,
+  standard-user end-to-end testing and a new branch/concise PR. Created
+  `codex/continuation-defaults-and-prompt-profile` from the evaluated branch.
+  Updated the product and technical plan before production changes.
+- Ported default-off `idleContinuationBackoff`, sparse inheritance/provenance,
+  live preference application, restoration/claim/status/accounting gates and
+  zero default goal-content snapshots. Added permanent defaults, live edits,
+  legacy metadata and allowance-preservation regressions; retained #90.
+- Implemented request-only prompt/tool projection through public host hooks and
+  transcript APIs. First executor requests now have the execution profile after
+  direct creation, drafting, resume and reload. Preserve external instructions,
+  head overrides, tool pairs, metadata and cache markers without private patches
+  or an extra model turn. Added real-library tests so SDK stubs cannot silently
+  skip this repair's coverage.
+- Added four actual-SDK user-command journeys with correct artifacts and real
+  auditor reads. Fresh production evidence records each journey's requests,
+  choices and stable executor prompt. All use isolated settings/projects.
+
+## Implementation setbacks and fixes
+
+- The first full suite found `/goal-refresh` left the settings cache cold after
+  rescheduling, hiding the next external edit from its diff. Warm the explicit
+  snapshot after refresh; the existing cross-process refresh regression passes.
+- An initial normalization assertion expected invalid values to throw during
+  parsing. The established parser reports diagnostics; mutation rejects them.
+  Corrected the test to retain that API contract and verified both paths.
+- Actual terminal pacing initially added rows beneath the stable-height widget,
+  clipping its footer. Reused the existing status row for relative/local timing
+  and resume. Final 110×32 and 72×20 captures and height regressions pass.
+- Parallel host checks initially shared a fixed context-capture directory. Added
+  an isolated capture-directory environment override and reran the matrix.
+- Pi 0.86 has structured transcripts but lacks the newer full-context event;
+  using its public `context` event repairs that path. Pi 0.87 already has the
+  transcript helper, so tests now detect capability rather than guessing by
+  major version. Classic 0.83–0.85 retain their native path.
+- Extended checks to current Pi 1.4, matching issue #100's environment. Its event
+  union exposed the assumption that every `before_agent_start` contains `prompt`.
+  Handle its public custom-message trigger as well, preserving checkpoint
+  identity and stale rejection. Both trigger shapes have golden regressions.
+- Review found additive leading content could lose cache markers when converted
+  to a string. Preserve its content blocks and add a real-library regression.
+  Typecheck caught a nullable test fixture index; corrected the fixture before
+  the final suite/matrix. No skipped tests are hidden in the final root suite.
+
+## Production validation
+
+- Typecheck and lint pass. Final full suite: **1,145 passed, zero failed/skipped**;
+  discovery is 78 unit, 1 integration and 6 e2e files. Retained provider recovery,
+  compaction, strict wait, lifecycle, token/run-limit and #90 checks pass.
+- Seven isolated host installations pass typecheck, 37 SDK checks per host and
+  real provider serialization: 0.83.0, 0.84.1, 0.85.1, 0.86.0, 0.87.0, 1.0.0,
+  1.4.0. CI now retains the new user/profile checks and the missing host boundaries.
+- Actual Pi CLI: rich `/goal` confirmation, Escape during a pending write,
+  narrow status, resume, audit and archival. Settings scope, global opt-in,
+  explicit project false and override removal work through keyboard choices,
+  with zero model requests for settings. Runtime opt-out dispatches in 19.5ms
+  locally and changes spent runs from 3 to 4 rather than renewing the allowance.
+- Production real-model coding goal passes with ordinary wording and actual
+  audit: 18 requests, 75.7s, five artifact tests, independent assertions and zero
+  scheduling declarations. SDK-reported cost $0.002819. This is one observation,
+  not a causal latency/cost ranking or representative-user study.
+- Repeated production efficiency campaign: 72 equal-state captures and 19 SDK
+  scenarios pass; no new default payload, no pacing snapshots when disabled,
+  one executor prefix variant, explicit wait quiet and duplicate wake admitted
+  once. Unbounded default idle behavior remains visible in harness-ceiling cases.
+- Context gate: all 24 existing fixtures pass without baseline changes. Provider
+  crosscheck: six SDK and three Responses payloads pass. Retention checks through
+  4 MiB histories, same-machine 105-row runtime regression gate, package dry run,
+  six publication checks and five ranking checks pass. Benchmark setup used an
+  on-disk archive after Node's default stdout buffer proved too small.
+- Final product/technical status points to `IMPLEMENTATION.md` and compact
+  `evidence/production/` records. Earlier prototype reports remain historical.
+  README, dependency pins and the unrelated pre-existing spec remain unchanged.
+- Rechecked open issues: #90 and #100. #90 is fixed; #100 gains optional pacing
+  and stays open because immediate unlimited defaults can still loop. No issue
+  state, upstream report or producer integration was changed.

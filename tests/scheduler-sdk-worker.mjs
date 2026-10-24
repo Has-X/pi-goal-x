@@ -14,7 +14,7 @@ const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'scheduler-sdk-'));
 fs.mkdirSync(path.join(cwd, '.pi'));
 const implicit = process.argv.includes('--implicit');
 const uncapped = process.argv.includes('--uncapped');
-fs.writeFileSync(path.join(cwd, '.pi', 'pi-goal-x-settings.json'), JSON.stringify({ ...(!implicit ? { strictExecutionContract: true } : {}), ...(!uncapped && !implicit ? { maxAutonomousRuns: 4 } : {}) }));
+fs.writeFileSync(path.join(cwd, '.pi', 'pi-goal-x-settings.json'), JSON.stringify({ ...(!implicit ? { strictExecutionContract: true } : { idleContinuationBackoff: true }), ...(!uncapped && !implicit ? { maxAutonomousRuns: 4 } : {}) }));
 process.env.PI_GOAL_GLOBAL_SETTINGS_FILE = path.join(cwd, 'absent-global');
 let session, core, piApi;
 const requests = [];

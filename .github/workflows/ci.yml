@@ -75,6 +75,10 @@ jobs:
             node: 24
           - sdk: 0.86.0
             node: 24
+          - sdk: 0.87.0
+            node: 24
+          - sdk: 1.4.0
+            node: 24
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -87,5 +91,5 @@ jobs:
       - run: npm run check
       - name: Host and provider regressions
         run: |
-          node --experimental-strip-types --import ./scripts/test-adapter-hooks.mjs --test tests/e2e/goal-prompt-cache-sdk.test.ts tests/e2e/goal-scheduler-sdk.test.ts tests/goal-rpc-dialogs.test.ts tests/goal-widget-lifetime.test.ts
+          node --experimental-strip-types --import ./scripts/test-adapter-hooks.mjs --test tests/e2e/goal-prompt-cache-sdk.test.ts tests/e2e/goal-scheduler-sdk.test.ts tests/e2e/goal-continuation-user.test.ts tests/goal-prompt-profile.test.ts tests/goal-rpc-dialogs.test.ts tests/goal-widget-lifetime.test.ts
           npm run context:provider-check
