@@ -81,6 +81,21 @@ describe("layering matrix", () => {
 			assert.equal(loadGoalSettings(dir, env).idleContinuationBackoff, false);
 		});
 	});
+	it("showContextUsage defaults on and layers like other boolean leaves", () => {
+		withTempDir(dir => {
+			const env = { PI_GOAL_GLOBAL_SETTINGS_FILE: path.join(dir, "global.json") };
+			invalidateGoalSettingsCache();
+			assert.equal(loadGoalSettings(dir, env).showContextUsage, true);
+			writeJson(path.join(dir, ".pi", "pi-goal-x-settings.json"), { showContextUsage: false });
+			invalidateGoalSettingsCache();
+			assert.equal(loadSettingsSnapshot(dir, env).provenance.get("showContextUsage")?.source, "project");
+			assert.equal(loadGoalSettings(dir, env).showContextUsage, false);
+			for (const invalid of [1, null, "off"]) {
+				assert.throws(() => mutateSettingsLayer({ scope: "project", cwd: dir, env, mutation: { op: "set", path: ["showContextUsage"], value: invalid } }), SettingsMutationError);
+			}
+		});
+	});
+
 	it("no global file behaves identically to project-only resolution", () => {
 		withTempDir((dir) => {
 			const env = { PI_GOAL_GLOBAL_SETTINGS_FILE: path.join(dir, "no-global.json") };

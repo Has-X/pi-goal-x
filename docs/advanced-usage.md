@@ -24,6 +24,10 @@ The `Autonomous runs: used/limit` line reports a finite allowance and is left ou
 allowance is unlimited. Set `showAutonomousRuns` to `false` to drop it for a finite
 allowance as well; it defaults to `true`.
 
+The `Context snapshot` line in goal prompts reports current context-window
+occupancy. Set `showContextUsage` to `false` to omit it (defaults to `true`);
+internal context accounting and automatic compaction are unaffected.
+
 Agents may edit this setting. Changing it does not replenish consumed runs; explicit `/goal-resume` renews the period and continues now, including from a waiting goal. No configured allowance is required unless the effective limit is zero, which disables resume. Tool calls within a run are not separate runs. Existing token budgets still apply.
 
 Explicit `ready` is optional in default mode. A goal saved before next actions were
